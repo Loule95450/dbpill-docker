@@ -1,5 +1,7 @@
 import { createAdvancedProxy, IAdvancedProxySession } from 'pg-server';
 import { Socket } from 'net';
+import { DbRawCommand } from 'pg-server';
+import { CommandCode, ResponseCode } from 'pg-server';
 
 enum CommandType {
   Startup = 0,
@@ -68,24 +70,150 @@ interface ParseBindPair {
   bind: BindCommand | null;
 }
 
-class PostgresProxySession implements IAdvancedProxySession {
-  private state: 'idle' | 'expecting_bind' = 'idle';
-  private currentParseBind: ParseBindPair | null = null;
+interface ParseBindExecute {
+  parse: ParseCommand;
+  bind: BindCommand;
+  execute: ExecuteCommand;
+}
+
+class AdvancedPostgresProxySession implements IAdvancedProxySession {
+  private state: 'idle' | 'expecting_bind' | 'expecting_execute' | 'executing' = 'idle';
+  private currentParseBind: ParseBindExecute | null = null;
   private namedStatements: Map<string, string> = new Map();
+  private explainState: 'idle' | 'executing_original' | 'executing_explain' = 'idle';
+  private queryQueue: { query: string, params?: any[] }[] = [];
+  private currentQuery: { query: string, params?: any[] } | null = null;
+  private explainResults: Map<string, string> = new Map();
 
   onConnect(socket: Socket) {
     console.log('👤 Client connected, IP: ', socket.remoteAddress);
   }
 
-  async onCommand({ command, getRawData }: { command: any; getRawData: () => Buffer }, { client, db }: any) {
+  async onCommand({ command, getRawData }: DbRawCommand, { client, db }: any) {
     const typedCommand = this.parseCommand(command);
-    this.processCommand(typedCommand);
-    db.sendRaw(getRawData());
+    await this.processCommand(typedCommand, client, db, getRawData);
   }
 
-  onQuery(query: string) {
-    console.log('Intercepted Query (Fallback):', query);
-    return query;
+  async onResult(result: any, { client, db }: any) {
+    switch (this.explainState) {
+      case 'executing_original':
+        client.command(result.response);
+
+        if (result.response.type === ResponseCode.ReadyForQuery) {
+          this.explainState = 'executing_explain';
+          await this.executeExplainAnalyze(db);
+        }
+        break;
+
+      case 'executing_explain':
+        if (result.response.type === ResponseCode.DataRow) {
+          this.captureExplainResult(result.response.fields);
+        } else if (result.response.type === ResponseCode.ReadyForQuery) {
+          this.explainState = 'idle';
+          this.state = 'idle';
+          await this.processNextQuery(db);
+        }
+        break;
+
+      default:
+        client.command(result.response);
+    }
+  }
+
+  private async processCommand(command: Command, client: any, db: any, getRawData: () => Buffer) {
+    switch (this.state) {
+      case 'idle':
+        if (command.type === CommandType.Parse) {
+          this.state = 'expecting_bind';
+          this.currentParseBind = { parse: command, bind: null!, execute: null! };
+          if (command.queryName) {
+            this.namedStatements.set(command.queryName, command.query);
+          }
+          db.sendRaw(getRawData());
+        } else if (command.type === CommandType.Query) {
+          await this.handleQuery(command.query, undefined, db);
+        } else {
+          db.sendRaw(getRawData());
+        }
+        break;
+
+      case 'expecting_bind':
+        if (command.type === CommandType.Bind) {
+          if (this.currentParseBind) {
+            this.currentParseBind.bind = command;
+            this.state = 'expecting_execute';
+          }
+          db.sendRaw(getRawData());
+        } else {
+          console.log('Unexpected command while expecting Bind:', this.formatCommand(command));
+          this.state = 'idle';
+          db.sendRaw(getRawData());
+        }
+        break;
+
+      case 'expecting_execute':
+        if (command.type === CommandType.Execute) {
+          if (this.currentParseBind) {
+            this.currentParseBind.execute = command;
+            await this.handleQuery(this.currentParseBind.parse.query, this.currentParseBind.bind.parameters, db);
+            this.state = 'executing';
+          }
+        } else {
+          console.log('Unexpected command while expecting Execute:', this.formatCommand(command));
+          this.state = 'idle';
+        }
+        db.sendRaw(getRawData());
+        break;
+
+      case 'executing':
+        if (command.type === CommandType.Sync) {
+          this.state = 'idle';
+        }
+        db.sendRaw(getRawData());
+        break;
+    }
+  }
+
+  private async handleQuery(query: string, params: any[] | undefined, db: any) {
+    this.queryQueue.push({ query, params });
+
+    console.log('Intercepted Query:', query, params);
+
+    if (this.explainState === 'idle') {
+      await this.processNextQuery(db);
+    }
+  }
+
+  private async processNextQuery(db: any) {
+    if (this.queryQueue.length > 0) {
+      this.currentQuery = this.queryQueue.shift()!;
+      this.explainState = 'executing_original';
+      if (this.currentQuery.params) {
+        await db.send({ type: CommandCode.query, query: this.currentQuery.query, values: this.currentQuery.params });
+      } else {
+        await db.send({ type: CommandCode.query, query: this.currentQuery.query });
+      }
+    }
+  }
+
+  private async executeExplainAnalyze(db: any) {
+    if (this.currentQuery) {
+      const explainQuery = `EXPLAIN ANALYZE ${this.currentQuery.query}`;
+      if (this.currentQuery.params) {
+        await db.send({ type: CommandCode.query, query: explainQuery, values: this.currentQuery.params });
+      } else {
+        await db.send({ type: CommandCode.query, query: explainQuery });
+      }
+    }
+  }
+
+  private captureExplainResult(fields: (string | null)[]) {
+    if (this.currentQuery) {
+      const explainOutput = fields.map(field => field ?? '').join('\n');
+      this.explainResults.set(this.currentQuery.query, explainOutput);
+      console.log(`EXPLAIN ANALYZE for query "${this.currentQuery.query}":`);
+      console.log(explainOutput);
+    }
   }
 
   private formatCommand(command: Command): string {
@@ -138,59 +266,11 @@ class PostgresProxySession implements IAdvancedProxySession {
     }
   }
 
-  private processCommand(command: Command) {
-    switch (this.state) {
-      case 'idle':
-        if (command.type === CommandType.Parse) {
-          this.state = 'expecting_bind';
-          this.currentParseBind = { parse: command, bind: null };
-          if (command.queryName) {
-            this.namedStatements.set(command.queryName, command.query);
-          }
-        } else if (command.type === CommandType.Bind) {
-          console.log('Bind (reusing prepared statement):', this.formatBind(command));
-        } else {
-          console.log('Intercepted Command:', this.formatCommand(command));
-        }
-        break;
-      case 'expecting_bind':
-        if (command.type === CommandType.Bind) {
-          if (this.currentParseBind) {
-            this.currentParseBind.bind = command;
-            console.log('Completed Parse + Bind:', this.formatParseBind(this.currentParseBind));
-            this.currentParseBind = null;
-          }
-          this.state = 'idle';
-        } else {
-          console.log('Unexpected command while expecting Bind:', this.formatCommand(command));
-          this.state = 'idle';
-        }
-        break;
-    }
-  }
-
-  private formatBind(bind: BindCommand): string {
-    const preparedQuery = this.namedStatements.get(bind.statement) || 'Unknown query';
-    return `Bind: portal "${bind.portal}", statement "${bind.statement}" (${preparedQuery}), ${bind.parameters.length} parameters`;
-  }
-
-  private formatParseBind(parseBind: ParseBindPair): string {
-    const queryName = parseBind.parse.queryName ? ` (name: "${parseBind.parse.queryName}")` : '';
-    return `Parse: ${parseBind.parse.query}${queryName} + ` +
-           `Bind: ${parseBind.bind ? `${parseBind.bind.parameters.length} parameters` : 'No parameters'}`;
-  }
-
-  private processQuery(query: string, params?: any[]) {
-    console.log('Query:', query);
-    if (params) {
-      console.log('Parameters:', params);
-    }
-  }
 }
 
 const server = createAdvancedProxy(
   { port: 5432, host: 'localhost' },
-  PostgresProxySession
+  AdvancedPostgresProxySession
 );
 
 server.listen(5433, 'localhost');

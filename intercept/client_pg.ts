@@ -26,7 +26,7 @@ console.log('Connected to the proxy');
 const nowResult = await executeQuery(client, 'SELECT NOW()');
 console.log('Query result:', nowResult);
 
-const usersResult = await executeQuery(client, 'SELECT * FROM players WHERE entity_key = $1', [1]);
+const usersResult = await executeQuery(client, 'SELECT * FROM players WHERE player_id > $1', [1]);
 console.log('Query result:', usersResult);
 
 const tablesResult = await executeQuery(
