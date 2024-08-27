@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "pg": "^8.12.0",
+    "pg-server": "^0.1.8"
+  }
+}
