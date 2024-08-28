@@ -1,49 +1,89 @@
-import { Client } from 'pg';
-
-export interface QueryAnalysis {
-  query: string;
-  parameters: any[];
-  explainAnalyze: any;
-  lastExecutionTime: Date;
-}
+import sqlite3 from 'sqlite3';
+import { open, Database } from 'sqlite';
 
 export class StatsManager {
-  private analysisStore: Map<string, QueryAnalysis> = new Map();
-  private client: Client;
+  private db: Database<sqlite3.Database> | null = null;
 
-  constructor(connectionString: string) {
-    this.client = new Client(connectionString);
-    this.client.connect();
+  constructor(private dbPath: string) {}
+
+  async initialize(): Promise<void> {
+    this.db = await open({
+      filename: this.dbPath,
+      driver: sqlite3.Database
+    });
+    await this.exec(`
+      CREATE TABLE IF NOT EXISTS queries (
+        query_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT,
+        query TEXT,
+        params TEXT,
+        query_plan TEXT,
+        plan_time REAL,
+        exec_time REAL,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
   }
 
-  async analyzeQuery(query: string, parameters: any[]): Promise<void> {
-    // Replace $1, $2, etc. with actual parameter values
-    let parameterizedQuery = query;
-    parameters.forEach((param, index) => {
-      parameterizedQuery = parameterizedQuery.replace(`$${index + 1}`, typeof param === 'string' ? `'${param}'` : param);
-    });
-
-    const explainQuery = `EXPLAIN (ANALYZE, VERBOSE, FORMAT JSON) ${parameterizedQuery}`;
-    try {
-      const result = await this.client.query(explainQuery);
-      const analysis: QueryAnalysis = {
-        query,
-        parameters,
-        explainAnalyze: result.rows[0]['QUERY PLAN'][0],
-        lastExecutionTime: new Date(),
-      };
-      this.analysisStore.set(query, analysis);
-      console.log('Query analysis stored:', query);
-    } catch (error) {
-      console.error('Error analyzing query:', error);
+  private checkDb(): void {
+    if (!this.db) {
+      throw new Error('Database not initialized. Call initialize() first.');
     }
   }
 
-  getAnalysis(query: string): QueryAnalysis | undefined {
-    return this.analysisStore.get(query);
+  async exec(sql: string): Promise<void> {
+    this.checkDb();
+    return this.db!.exec(sql);
   }
 
-  getAllAnalyses(): Map<string, QueryAnalysis> {
-    return this.analysisStore;
+  async run(sql: string, params?: any[]): Promise<any> {
+    this.checkDb();
+    return this.db!.run(sql, params);
+  }
+
+  async get(sql: string, params?: any[]): Promise<any> {
+    this.checkDb();
+    return this.db!.get(sql, params);
+  }
+
+  async all(sql: string, params?: any[]): Promise<any[]> {
+    this.checkDb();
+    return this.db!.all(sql, params);
+  }
+
+  async addQueryStats(
+    sessionId: string,
+    query: string,
+    params: string,
+    queryPlan: string,
+    planTime: number,
+    execTime: number
+  ): Promise<void> {
+    await this.run(`
+      INSERT INTO queries (session_id, query, params, query_plan, plan_time, exec_time)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, [sessionId, query, params, queryPlan, planTime, execTime]);
+  }
+
+  async getQueryStats(queryId: number): Promise<any> {
+    return this.get('SELECT * FROM queries WHERE query_id = ?', [queryId]);
+  }
+
+  async getQueryStatsOrderBy(orderBy: string, direction: string = 'DESC'): Promise<any[]> {
+    if (direction.toUpperCase() !== 'ASC' && direction.toUpperCase() !== 'DESC') {
+      throw new Error('Invalid direction. Must be either ASC or DESC.');
+    }
+    return this.all(`SELECT * FROM queries ORDER BY ${orderBy} ${direction}`);
+  }
+
+  async getAllQueryStats(): Promise<any[]> {
+    return this.all('SELECT * FROM queries ORDER BY timestamp DESC');
+  }
+
+  async close(): Promise<void> {
+    if (this.db) {
+      await this.db.close();
+      this.db = null;
+    }
   }
 }
