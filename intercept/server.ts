@@ -21,10 +21,17 @@ export function runServer(queryAnalyzer: QueryAnalyzer) {
     });
 
     app.get('/slow_queries', async (req, res) => {
-        // const slow_queries = await queryLogger.getSlowQueries();
-        // res.render('slow_queries', { slow_queries });
+        const slow_queries = await queryLogger.getSlowQueries();
+        res.render('slow_queries', { slow_queries });
     });
 
+    app.get('/analyze', async (req, res) => {
+        const queryId = req.query.query_id as string;
+        const stats = await queryLogger.getQueryStats(parseInt(queryId));
+        const { sessionId, query, queryPlan, planTime, execTime } = await queryAnalyzer.analyze({ query: stats.query, params: JSON.parse(stats.params) });
+        // queryAnalyzer.saveAnalysis({ sessionId, query, queryPlan, planTime, execTime });
+        res.render('analyze', { query, queryPlan, planTime, execTime });
+    });
 
     app.get('/suggest', async (req, res) => {
         const queryId = req.query.query_id as string;
@@ -58,12 +65,26 @@ export function runServer(queryAnalyzer: QueryAnalyzer) {
 
         const table_defs = await Promise.all(tables.map(table => queryAnalyzer.getTableStructure(table)));
 
-        const prompt = `Given the following query, query plan & table definitions, suggest index improvements that would result in significantly faster query execution. After explanation, provide the index creation SQL statements in a code block for sql, i.e.
+        const prompt = `Given the following query, query plan & table definitions, suggest index improvements that would result in significantly faster query execution. List out your proposed improvements and explain the reasoning. After the list, pick only the improvements that would lead to drastic change (you can ignore minor improvements). Then, provide a single code block with all the index proposals together at the end. i.e.:
 \`\`\`sql
-CREATE INDEX index_name ON table_name (column_name);
+CREATE INDEX dbpill_index_name ON table_name (column_name);
+CREATE INDEX dbpill_index_name_upper ON table_name (UPPER(column_name));
 \`\`\`
 
-${stats.query}\n\n${stats.query_plan}\n\n${table_defs.join('\n\n')}`;
+Always prefix the index name with dbpill_ to avoid conflicts with existing indexes.
+
+** Query details **
+
+${stats.query}
+
+** Query Plan **
+
+${stats.query_plan}
+
+** Table Definitions **
+
+${table_defs.join('\n\n')}
+`;
 
         res.header('Content-Type', 'text/plain');
         const response = await prompt_claude({ prompt, temperature: 0.5 });

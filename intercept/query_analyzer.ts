@@ -151,7 +151,7 @@ export class QueryAnalyzer {
   }
 
 
-  async analyze({ query, params = [] }: AnalyzeParams): Promise<void> {
+  async analyze({ query, params = [] }: AnalyzeParams): Promise<any> {
     let client: PoolClient | null = null;
 
     try {
@@ -165,14 +165,8 @@ export class QueryAnalyzer {
         const planTime = queryPlan['Planning Time'];
         const execTime = queryPlan['Execution Time'];
 
-        this.logger.addQueryStats({
-          sessionId: this.sessionId,
-          query,
-          params: JSON.stringify(params),
-          queryPlan: JSON.stringify(queryPlan, null, 2),
-          planTime,
-          execTime,
-        });
+        const sessionId = this.sessionId;
+        return { sessionId, query, queryPlan, planTime, execTime };
       }
     } catch (error) {
       console.error('Error analyzing query:', error);
@@ -184,6 +178,17 @@ export class QueryAnalyzer {
     }
   }
 
+  async saveAnalysis({ sessionId, query, params, queryPlan, planTime, execTime }: any) {
+    this.logger.addQueryStats({
+      sessionId,
+      query,
+      params: JSON.stringify(params),
+      queryPlan: JSON.stringify(queryPlan, null, 2),
+      planTime,
+      execTime,
+    });
+
+  }
   async close(): Promise<void> {
     await this.pool.end();
   }

@@ -87,6 +87,51 @@ export class QueryLogger {
     return this.all('SELECT * FROM queries ORDER BY timestamp DESC');
   }
 
+  async getSlowQueries(): Promise<any[]> {
+    return this.all(`
+      WITH query_stats AS (
+        SELECT 
+          query,
+          MAX(exec_time) AS max_exec_time,
+          MIN(exec_time) AS min_exec_time,
+          AVG(exec_time) AS avg_exec_time
+        FROM 
+          queries
+        GROUP BY 
+          query
+        HAVING 
+          AVG(exec_time) > 2
+      ),
+      max_exec_query AS (
+        SELECT 
+          query,
+          max_exec_time
+        FROM 
+          query_stats
+        ORDER BY 
+          max_exec_time DESC
+        LIMIT 1
+      )
+      SELECT 
+        qs.query,
+        qs.max_exec_time,
+        qs.min_exec_time,
+        qs.avg_exec_time,
+        q.query_id,
+        q.query_plan,
+        q.params
+      FROM 
+        query_stats qs
+      LEFT JOIN 
+        max_exec_query meq ON qs.query = meq.query
+      LEFT JOIN 
+        queries q ON qs.query = q.query AND qs.max_exec_time = q.exec_time
+      ORDER BY 
+        qs.avg_exec_time DESC;  
+          
+    `);
+  }
+
   async close(): Promise<void> {
     if (this.db) {
       await this.db.close();
