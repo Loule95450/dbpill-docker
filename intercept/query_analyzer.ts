@@ -1,0 +1,192 @@
+import { Pool, PoolClient } from 'pg';
+import pgStructure, { Db } from 'pg-structure';
+import { QueryLogger } from './query_logger';
+
+interface AnalyzeParams {
+  query: string;
+  params?: any[];
+}
+
+interface QueryPlan {
+  Plan: {
+    'Planning Time': number;
+    'Execution Time': number;
+  };
+}
+
+export class QueryAnalyzer {
+  private pool: Pool;
+  private sessionId: string;
+  public logger: QueryLogger;
+
+  constructor(connectionString: string) {
+    this.pool = new Pool({ connectionString });
+    this.sessionId = Math.random().toString(36).substring(2, 8);
+
+    const logger = new QueryLogger('queries.db');
+    logger.initialize();
+    this.logger = logger;
+  }
+
+
+  async getTableStructure(tableName: string, schemaName?: string): Promise<string> {
+    let output = '';
+
+    let client: PoolClient | null = null;
+    try {
+      client = await this.pool.connect();
+
+      if(!schemaName) {
+        const currentSchemaQuery = `
+          SELECT current_schema();
+        `;
+
+        const currentSchemaResult = await client.query(currentSchemaQuery);
+        schemaName = currentSchemaResult.rows[0].current_schema;
+      }
+
+      try {
+        // Table info
+        const tableInfoQuery = `
+        SELECT table_type
+        FROM information_schema.tables
+        WHERE table_schema = $1 AND table_name = $2;
+      `;
+        const tableInfoResult = await client.query(tableInfoQuery, [schemaName, tableName]);
+        if (tableInfoResult.rows.length === 0) {
+          return `Table '${schemaName}.${tableName}' not found.`;
+        }
+        output += `${tableInfoResult.rows[0].table_type}: ${schemaName}.${tableName}\n\n`;
+
+        // Columns
+        const columnQuery = `
+        SELECT column_name, data_type, character_maximum_length, is_nullable, column_default
+        FROM information_schema.columns
+        WHERE table_schema = $1 AND table_name = $2
+        ORDER BY ordinal_position;
+      `;
+        const columnResult = await client.query(columnQuery, [schemaName, tableName]);
+        output += 'Columns:\n';
+        columnResult.rows.forEach(row => {
+          let columnInfo = `- ${row.column_name}: ${row.data_type}`;
+          if (row.character_maximum_length) columnInfo += `(${row.character_maximum_length})`;
+          columnInfo += ` ${row.is_nullable === 'YES' ? 'NULL' : 'NOT NULL'}`;
+          if (row.column_default) columnInfo += ` DEFAULT ${row.column_default}`;
+          output += columnInfo + '\n';
+        });
+        output += '\n';
+
+        // Constraints
+        const constraintQuery = `
+        SELECT con.conname, con.contype, pg_get_constraintdef(con.oid) as definition
+        FROM pg_constraint con
+        INNER JOIN pg_class rel ON rel.oid = con.conrelid
+        INNER JOIN pg_namespace nsp ON nsp.oid = rel.relnamespace
+        WHERE nsp.nspname = $1 AND rel.relname = $2;
+      `;
+        const constraintResult = await client.query(constraintQuery, [schemaName, tableName]);
+        if (constraintResult.rows.length > 0) {
+          output += 'Constraints:\n';
+          constraintResult.rows.forEach(row => {
+            const constraintType = {
+              'p': 'PRIMARY KEY',
+              'f': 'FOREIGN KEY',
+              'u': 'UNIQUE',
+              'c': 'CHECK'
+            }[row.contype] || 'OTHER';
+            output += `- ${row.conname} (${constraintType}): ${row.definition}\n`;
+          });
+          output += '\n';
+        }
+
+        // Indexes
+        const indexQuery = `
+        SELECT indexname, indexdef
+        FROM pg_indexes
+        WHERE schemaname = $1 AND tablename = $2;
+      `;
+        const indexResult = await client.query(indexQuery, [schemaName, tableName]);
+        if (indexResult.rows.length > 0) {
+          output += 'Indexes:\n';
+          indexResult.rows.forEach(row => {
+            output += `- ${row.indexname}: ${row.indexdef}\n`;
+          });
+          output += '\n';
+        }
+
+        // Table stats
+        const statsQuery = `
+        SELECT pg_size_pretty(pg_total_relation_size($1)) as total_size,
+               pg_size_pretty(pg_table_size($1)) as table_size,
+               pg_size_pretty(pg_indexes_size($1)) as index_size,
+               pg_stat_get_live_tuples($1::regclass) as live_tuples,
+               pg_stat_get_dead_tuples($1::regclass) as dead_tuples
+        FROM pg_class
+        WHERE oid = $1::regclass;
+      `;
+        const statsResult = await client.query(statsQuery, [`${schemaName}.${tableName}`]);
+        if (statsResult.rows.length > 0) {
+          const stats = statsResult.rows[0];
+          output += 'Table Statistics:\n';
+          output += `- Total Size: ${stats.total_size}\n`;
+          output += `- Table Size: ${stats.table_size}\n`;
+          output += `- Index Size: ${stats.index_size}\n`;
+          output += `- Live Tuples: ${stats.live_tuples}\n`;
+          output += `- Dead Tuples: ${stats.dead_tuples}\n`;
+        }
+
+      } catch (error) {
+        output += `Error: ${error}\n`;
+      }
+
+    } catch (error) {
+      console.error('Error connecting to the database:', error);
+      throw error;
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+    return output;
+  }
+
+
+  async analyze({ query, params = [] }: AnalyzeParams): Promise<void> {
+    let client: PoolClient | null = null;
+
+    try {
+      client = await this.pool.connect();
+
+      const explainQuery = `EXPLAIN (ANALYZE, FORMAT JSON) ${query}`;
+      const result = await client.query(explainQuery, params);
+
+      if (result.rows.length > 0) {
+        const queryPlan: QueryPlan = result.rows[0]["QUERY PLAN"][0];
+        const planTime = queryPlan['Planning Time'];
+        const execTime = queryPlan['Execution Time'];
+
+        this.logger.addQueryStats({
+          sessionId: this.sessionId,
+          query,
+          params: JSON.stringify(params),
+          queryPlan: JSON.stringify(queryPlan, null, 2),
+          planTime,
+          execTime,
+        });
+      }
+    } catch (error) {
+      console.error('Error analyzing query:', error);
+      throw error;
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+  }
+
+  async close(): Promise<void> {
+    await this.pool.end();
+  }
+}
+
+export default QueryAnalyzer;
