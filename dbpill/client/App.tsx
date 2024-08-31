@@ -86,6 +86,7 @@ const TableData = styled.td`
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+  text-align: left;
 `;
 
 const QueryStats = styled.div`
@@ -96,6 +97,10 @@ const QueryStats = styled.div`
 
 const QueryStat = styled.div`
   padding: 0 2px 2px 2px;
+`;
+
+const PerformanceStat = styled(QueryStat)`
+  color: #00aa44;
 `;
 
 const QueryText = styled.pre<{ $expanded?: boolean }>`
@@ -178,14 +183,22 @@ const Block = styled.div`
 `;
 
 const IndexSuggestions = styled.div`
-  padding: 10px;
-  border-radius: 5px;
-
    & h4 {
     margin-top: 0;
+    padding-top: 0;
     margin-bottom: 10px;
     opacity: 0.5;
     font-weight: normal;
+  }
+`;
+
+const LoadingIndicator = styled.div`
+  display: inline-block;
+  animation: loading-indicator 1s infinite linear;
+  @keyframes loading-indicator {
+    0% { opacity: 0; }
+    50% { opacity: 1; }
+    100% { opacity: 0; }
   }
 `;
 
@@ -246,6 +259,10 @@ function Query() {
               <div>{index}. Params: {instance.params}</div>
             ))}
           </Block>
+          <h2>Query plan</h2>
+          <Block>
+            <pre>{instances ? instances[0].query_plan : ''}</pre>
+          </Block>
           <h2>AI Suggestions</h2>
           <Block>
             {queryData.llm_response ? (
@@ -281,6 +298,9 @@ function AllQueries() {
   };
 
   const getSuggestions = (query_id: string) => {
+    if(loadingSuggestions[query_id]) {
+      return;
+    }
     setLoadingSuggestions(prev => ({ ...prev, [query_id]: true }));
     fetch(`/api/suggest?query_id=${query_id}`, {
       method: 'GET',
@@ -297,6 +317,66 @@ function AllQueries() {
           newStats[index].llm_response = data.llm_response;
           newStats[index].suggested_indexes = data.suggested_indexes;
           newStats[index].applied_indexes = data.applied_indexes;
+          return newStats;
+        });
+      })
+      .finally(() => {
+        setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));
+      });
+  };
+
+  const applySuggestions = (query_id: string) => {
+    if(loadingSuggestions[query_id]) {
+      return;
+    }
+    setLoadingSuggestions(prev => ({ ...prev, [query_id]: true }));
+    fetch(`/api/apply_suggestions?query_id=${query_id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log(data);
+        setStats((prevStats) => {
+          const newStats = [...prevStats];
+          const index = newStats.findIndex((stat) => stat.query_id === query_id);
+          newStats[index].llm_response = data.llm_response;
+          newStats[index].suggested_indexes = data.suggested_indexes;
+          newStats[index].applied_indexes = data.applied_indexes;
+          newStats[index].prev_exec_time = data.prev_exec_time;
+          newStats[index].new_exec_time = data.new_exec_time;
+          return newStats;
+        });
+      })
+      .finally(() => {
+        setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));
+      });
+  };
+
+  const revertSuggestions = (query_id: string) => {
+    if(loadingSuggestions[query_id]) {
+      return;
+    }
+    setLoadingSuggestions(prev => ({ ...prev, [query_id]: true }));
+    fetch(`/api/revert_suggestions?query_id=${query_id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log(data);
+        setStats((prevStats) => {
+          const newStats = [...prevStats];
+          const index = newStats.findIndex((stat) => stat.query_id === query_id);
+          newStats[index].llm_response = data.llm_response;
+          newStats[index].suggested_indexes = data.suggested_indexes;
+          newStats[index].applied_indexes = data.applied_indexes;
+          newStats[index].prev_exec_time = data.prev_exec_time;
+          newStats[index].new_exec_time = data.new_exec_time;
           return newStats;
         });
       })
@@ -371,32 +451,67 @@ function AllQueries() {
                     <QueryStat>Avg execution time: {formatNumber(stat.avg_exec_time)}ms</QueryStat>
                     <QueryStat>Number of executions: {stat.num_instances}</QueryStat>
                   </QueryStats>
-                </TableData>
-                <IndexSuggestions>
-                  <h4>AI Suggested Indexes</h4>
-                  {!stat.llm_response ? (
-                    <ActionButton onClick={() => getSuggestions(stat.query_id)}>Get suggestions</ActionButton>
-                  ) : (
-                    <>
-                      {stat.suggested_indexes && (
-                        <div>
-                          <pre style={{maxWidth: '300px', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{stat.suggested_indexes.trim()}</pre>
-                        </div>
-                      )}
-                      {stat.suggested_indexes && !stat.applied_indexes && (
-                        <ActionButton type="main" onClick={() => getSuggestions(stat.query_id)}>
-                          {loadingSuggestions[stat.query_id] ? 'Loading...' : 'Apply index suggestions'}
-                        </ActionButton>
-                      )}
-                      {stat.applied_indexes && (
-                        <>
-                          <div>✅ Suggestions already applied</div>
-                          <ActionButton type="revert">Revert index changes</ActionButton>
-                        </>
-                      )}
-                    </>
+                  {stat.new_exec_time && (
+                    <QueryStats>
+                      <PerformanceStat>New execution time: {formatNumber(stat.new_exec_time)}ms</PerformanceStat>
+                      <PerformanceStat>Speed up: {formatNumber(stat.avg_exec_time / stat.new_exec_time)}x</PerformanceStat>
+                    </QueryStats>
                   )}
-                  </IndexSuggestions>
+                </TableData>
+                <TableData>
+                  <IndexSuggestions>
+                    <h4>AI Suggested Indexes</h4>
+                    {!stat.llm_response ? (
+                      <ActionButton onClick={() => getSuggestions(stat.query_id)}>
+                        {loadingSuggestions[stat.query_id] ? (
+                          <LoadingIndicator>Getting suggestions...</LoadingIndicator>
+                        ) : 'Get suggestions'}
+                      </ActionButton>
+                    ) : (
+                      <>
+                        {stat.suggested_indexes && (
+                          <div>
+                            <pre style={{maxWidth: '300px', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{stat.suggested_indexes.trim()}</pre>
+                          </div>
+                        )}
+                        {stat.suggested_indexes && !stat.applied_indexes && (
+                          <>
+                            <ActionButton type="main" onClick={() => applySuggestions(stat.query_id)}>
+                              {loadingSuggestions[stat.query_id] ? (
+                                <LoadingIndicator>Applying suggestions...</LoadingIndicator>
+                              ) : 'Apply index suggestions'}
+                            </ActionButton>
+                            <ActionButton onClick={() => {
+                              setStats(prevStats => {
+                                const newStats = [...prevStats];
+                                const index = newStats.findIndex((stat) => stat.query_id === stat.query_id);
+                                newStats[index].llm_response = null;
+                                newStats[index].suggested_indexes = null;
+                                newStats[index].applied_indexes = null;
+                                newStats[index].prev_exec_time = null;
+                                newStats[index].new_exec_time = null;
+                                return newStats;
+                              });
+                              getSuggestions(stat.query_id);
+                            }}>
+                              Reload
+                            </ActionButton>
+                          </>
+                        )}
+                        {stat.applied_indexes && (
+                          <>
+                            <div>✅ Suggestions already applied</div>
+                            <ActionButton type="revert" onClick={() => revertSuggestions(stat.query_id)}>
+                              {loadingSuggestions[stat.query_id] ? (
+                                <LoadingIndicator>Reverting suggestions...</LoadingIndicator>
+                              ) : 'Revert index changes'}
+                            </ActionButton>
+                          </>
+                        )}
+                      </>
+                    )}
+                    </IndexSuggestions>
+                  </TableData>
               </TableRow>
 
             );

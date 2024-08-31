@@ -37,25 +37,65 @@ export function setup_routes(app: any, io: any) {
         res.json({ stats, orderBy, orderDirection: orderDirection.toLowerCase() });
     });
 
-    app.get('/api/slow_queries', async (req, res) => {
-        const slow_queries = await queryLogger.getSlowQueries();
-        res.json({ slow_queries });
-    });
-
     app.get('/api/query/:query_id', async (req, res) => {
         const queryId = req.params.query_id as string;
         const queryData = await queryLogger.getQueryGroup(parseInt(queryId));
         console.log("AAA", queryData);
         res.json(queryData);
     });
-
-    app.get('/analyze', async (req, res) => {
+    
+    app.get('/api/apply_suggestions', async (req, res) => {
         const queryId = req.query.query_id as string;
-        const stats = await queryLogger.getQueryStats(parseInt(queryId));
-        const { sessionId, query, queryPlan, planTime, execTime } = await queryAnalyzer.analyze({ query: stats.query, params: JSON.parse(stats.params) });
-        // queryAnalyzer.saveAnalysis({ sessionId, query, queryPlan, planTime, execTime });
-        // res.render('analyze', { query, queryPlan, planTime, execTime });
-        res.json({ query, queryPlan, planTime, execTime });
+        const stats = await queryLogger.getQueryGroup(parseInt(queryId));
+        const suggested_indexes = stats.suggested_indexes;
+
+        const instances = await queryLogger.getQueryInstances(parseInt(queryId));
+        if(instances.length ==0) {
+            res.json(stats);
+            return;
+        }
+        const slowest_instance = instances[0];
+        const params = JSON.parse(slowest_instance.params);
+
+        try {
+            await queryAnalyzer.applyIndexes(suggested_indexes);
+        } catch (error) {
+            console.error('Error applying indexes:', error);
+        }
+        // run analyze again to get the new execution time
+        const { execTime } = await queryAnalyzer.analyze({ 
+            query: stats.query, 
+            params 
+        });
+        console.log('execTime', execTime);
+
+        await queryLogger.updateQueryStats(parseInt(queryId), {
+            applied_indexes: suggested_indexes,
+            prev_exec_time: stats.exec_time,
+            new_exec_time: execTime
+        });
+
+        const newQueryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        res.json(newQueryData);
+    });
+
+    app.get('/api/revert_suggestions', async (req, res) => {
+        const queryId = req.query.query_id as string;
+        const stats = await queryLogger.getQueryGroup(parseInt(queryId));
+        const applied_indexes = stats.applied_indexes;
+
+        const index_names = applied_indexes.match(/CREATE INDEX.*?\n/g)?.map(index => index.split(' ')[2]) ?? [];
+
+        const drop_statement = index_names.map(index => `DROP INDEX IF EXISTS ${index};`).join('\n');
+        await queryAnalyzer.applyIndexes(drop_statement);
+
+        await queryLogger.updateQueryStats(parseInt(queryId), {
+            applied_indexes: null,
+            prev_exec_time: null,
+            new_exec_time: null
+        });
+        const newQueryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        res.json(newQueryData);
     });
 
     app.get('/view_suggestion', async (req, res) => {
@@ -67,7 +107,14 @@ export function setup_routes(app: any, io: any) {
 
     app.get('/api/suggest', async (req, res) => {
         const queryId = req.query.query_id as string;
-        const stats = await queryLogger.getQueryStats(parseInt(queryId));
+        const stats = await queryLogger.getQueryGroup(parseInt(queryId));
+        const instances = await queryLogger.getQueryInstances(parseInt(queryId));
+
+        if(instances.length == 0) {
+            res.json(stats);
+            return;
+        }
+
         function extractRelationNames(plan) {
             let relationNames = [];
           
@@ -92,7 +139,7 @@ export function setup_routes(app: any, io: any) {
             return [...new Set(relationNames)];
           }
 
-        const queryPlan = JSON.parse(stats.query_plan);
+        const queryPlan = JSON.parse(instances[0].query_plan);
         const tables = extractRelationNames(queryPlan);
 
         const table_defs = await Promise.all(tables.map(table => queryAnalyzer.getTableStructure(table)));
@@ -111,7 +158,7 @@ ${stats.query}
 
 ** Query Plan **
 
-${stats.query_plan}
+${queryPlan}
 
 ** Table Definitions **
 

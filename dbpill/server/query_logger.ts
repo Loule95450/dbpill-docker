@@ -21,6 +21,8 @@ export interface QueryGroup {
     llm_response: string;
     suggested_indexes: string;
     applied_indexes: string;
+    prev_exec_time: number;
+    new_exec_time: number;
     min_exec_time: number;
     max_exec_time: number;
     avg_exec_time: number;
@@ -236,6 +238,12 @@ export class QueryLogger {
         return results;
     }
 
+    async getQueryInstances(queryId: number): Promise<any[]> {
+        return this.all(`
+            SELECT * FROM query_instances WHERE query_id = ? ORDER BY exec_time DESC
+        `, [queryId]);
+    }
+
     async getQueryStats(queryId: number): Promise<any> {
         return this.get(`
             SELECT q.query_id, q.query, qi.*, q.llm_response, q.suggested_indexes, q.applied_indexes
@@ -268,55 +276,12 @@ export class QueryLogger {
         `);
     }
 
-    async getSlowQueries(): Promise<any[]> {
-        return this.all(`
-            WITH query_stats AS (
-                SELECT
-                    q.query_id,
-                    q.query,
-                    MAX(qi.exec_time) AS max_exec_time,
-                    MIN(qi.exec_time) AS min_exec_time,
-                    AVG(qi.exec_time) AS avg_exec_time
-                FROM
-                    queries q
-                JOIN
-                    query_instances qi ON q.query_id = qi.query_id
-                GROUP BY
-                    q.query_id, q.query
-                HAVING
-                    AVG(qi.exec_time) > 2
-            ),
-            max_exec_query AS (
-                SELECT
-                    query_id,
-                    query,
-                    max_exec_time
-                FROM
-                    query_stats
-                ORDER BY
-                    max_exec_time DESC
-                LIMIT 1
-            )
-            SELECT
-                qs.query_id,
-                qs.query,
-                qs.max_exec_time,
-                qs.min_exec_time,
-                qs.avg_exec_time,
-                qi.instance_id,
-                qi.query_plan,
-                qi.params
-            FROM
-                query_stats qs
-            LEFT JOIN
-                max_exec_query meq ON qs.query_id = meq.query_id
-            LEFT JOIN
-                query_instances qi ON qs.query_id = qi.query_id AND qs.max_exec_time = qi.exec_time
-            ORDER BY
-                qs.avg_exec_time DESC;
-        `);
-    }
 
+    async updateQueryStats(queryId: number, updates: Partial<QueryGroup>): Promise<void> {
+      await this.run(`
+        UPDATE queries SET ${Object.keys(updates).map(key => `${key} = ?`).join(', ')} WHERE query_id = ?
+      `, [...Object.values(updates), queryId]);
+    }
 
   async addSuggestion({ query_id, llm_response, suggested_indexes }: { query_id: number, llm_response: string, suggested_indexes: string }) {
     await this.run(`

@@ -168,6 +168,8 @@ export class QueryAnalyzer {
         return { sessionId, query, params, queryPlan, planTime, execTime };
       }
     } catch (error) {
+      console.error(query);
+      console.error(params);
       console.error('Error analyzing query:', error);
       throw error;
     } finally {
@@ -188,6 +190,25 @@ export class QueryAnalyzer {
       execTime,
     });
 
+  }
+
+  async applyIndexes(indexes: string) {
+    const client = await this.pool.connect();
+    try {
+      await client.query(`
+        BEGIN;
+        ${indexes}
+        COMMIT;
+      `);
+    } catch (error) {
+      console.error(indexes);
+      console.error('Error applying indexes:', error);
+      throw error;
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
   }
 
   async close(): Promise<void> {
