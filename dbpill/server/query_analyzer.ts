@@ -1,6 +1,6 @@
 import { Pool, PoolClient } from 'pg';
-import pgStructure, { Db } from 'pg-structure';
 import { QueryLogger } from './query_logger';
+import { format as formatQuery } from 'sql-formatter';
 
 interface AnalyzeParams {
   query: string;
@@ -24,7 +24,6 @@ export class QueryAnalyzer {
     this.sessionId = Math.random().toString(36).substring(2, 8);
 
     const logger = new QueryLogger('queries.db');
-    logger.initialize();
     this.logger = logger;
   }
 
@@ -166,7 +165,7 @@ export class QueryAnalyzer {
         const execTime = queryPlan['Execution Time'];
 
         const sessionId = this.sessionId;
-        return { sessionId, query, queryPlan, planTime, execTime };
+        return { sessionId, query, params, queryPlan, planTime, execTime };
       }
     } catch (error) {
       console.error('Error analyzing query:', error);
@@ -179,16 +178,18 @@ export class QueryAnalyzer {
   }
 
   async saveAnalysis({ sessionId, query, params, queryPlan, planTime, execTime }: any) {
+    query = formatQuery(query, { language: 'postgresql', denseOperators: true });
     this.logger.addQueryStats({
       sessionId,
       query,
-      params: JSON.stringify(params),
+      params: JSON.stringify(params, null, 2),
       queryPlan: JSON.stringify(queryPlan, null, 2),
       planTime,
       execTime,
     });
 
   }
+
   async close(): Promise<void> {
     await this.pool.end();
   }

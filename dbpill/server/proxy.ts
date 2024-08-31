@@ -3,10 +3,9 @@ import { Socket } from 'net';
 import { DbRawCommand } from 'pg-server';
 import { CommandCode, ResponseCode } from 'pg-server';
 
-import { runServer as runExpressServer } from './server';
 import { QueryAnalyzer } from './query_analyzer';
 
-const queryAnalyzer = new QueryAnalyzer("postgresql://cashorbit@localhost:5432/cashorbit");
+export const queryAnalyzer = new QueryAnalyzer("postgresql://cashorbit@localhost:5432/cashorbit");
 
 enum CommandType {
     Startup = 0,
@@ -174,5 +173,3 @@ const server = createAdvancedProxy(
 
 server.listen(5433, 'localhost');
 console.log('Advanced proxy listening on port 5433');
-
-runExpressServer(queryAnalyzer);
