@@ -45,7 +45,9 @@ export class QueryLogger {
                 query TEXT UNIQUE,
                 llm_response TEXT,
                 suggested_indexes TEXT,
-                applied_indexes TEXT
+                applied_indexes TEXT,
+                prev_exec_time REAL,
+                new_exec_time REAL
             )
         `);
 
@@ -123,6 +125,115 @@ export class QueryLogger {
               VALUES (?, ?, ?, ?, ?, ?)
           `, [query_id, sessionId, params, queryPlan, planTime, execTime]);
 
+    }
+
+    async getQueryGroups({orderBy, orderDirection}: { orderBy: string, orderDirection: string}): Promise<any> {
+        const results: QueryGroup[] = await this.all(`
+            WITH query_stats AS (
+                SELECT
+                    q.query_id,
+                    q.query,
+                    q.llm_response,
+                    q.suggested_indexes,
+                    q.applied_indexes,
+                    q.prev_exec_time,
+                    q.new_exec_time,
+                    COUNT(qi.instance_id) AS num_instances,
+                    MAX(qi.exec_time) AS max_exec_time,
+                    MIN(qi.exec_time) AS min_exec_time,
+                    AVG(qi.exec_time) AS avg_exec_time
+                FROM
+                    queries q
+                JOIN
+                    query_instances qi ON q.query_id = qi.query_id
+                GROUP BY
+                    q.query_id, q.query
+            ),
+            max_exec_query AS (
+                SELECT
+                    query_id,
+                    query,
+                    max_exec_time
+                FROM
+                    query_stats
+                ORDER BY
+                    max_exec_time DESC
+                LIMIT 1
+            )
+            SELECT
+                qs.query_id,
+                qs.query,
+                qs.max_exec_time,
+                qs.min_exec_time,
+                qs.avg_exec_time,
+                qs.prev_exec_time,
+                qs.new_exec_time,
+                qs.llm_response,
+                qs.suggested_indexes,
+                qs.applied_indexes,
+                qs.num_instances
+            FROM
+                query_stats qs
+            LEFT JOIN
+                max_exec_query meq ON qs.query_id = meq.query_id
+            LEFT JOIN
+                query_instances qi ON qs.query_id = qi.query_id AND qs.max_exec_time = qi.exec_time
+            ORDER BY
+                qs.${orderBy} ${orderDirection};
+        `);
+        return results;
+    }
+
+    async getQueryGroup(queryId: number): Promise<any> {
+        const results = await this.get(`
+            WITH query_stats AS (
+                SELECT
+                    q.query_id,
+                    q.query,
+                    q.llm_response,
+                    q.suggested_indexes,
+                    q.applied_indexes,
+                    q.prev_exec_time,
+                    q.new_exec_time,
+                    COUNT(qi.instance_id) AS num_instances,
+                    MAX(qi.exec_time) AS max_exec_time,
+                    MIN(qi.exec_time) AS min_exec_time,
+                    AVG(qi.exec_time) AS avg_exec_time
+                FROM
+                    queries q
+                JOIN
+                    query_instances qi ON q.query_id = qi.query_id
+                GROUP BY
+                    q.query_id, q.query
+            )
+            SELECT
+                qs.query_id,
+                qs.query,
+                qs.max_exec_time,
+                qs.min_exec_time,
+                qs.avg_exec_time,
+                qs.prev_exec_time,
+                qs.new_exec_time,
+                qs.llm_response,
+                qs.suggested_indexes,
+                qs.applied_indexes,
+                qs.num_instances
+            FROM
+                query_stats qs
+            LEFT JOIN
+                query_instances qi ON qs.query_id = qi.query_id AND qs.max_exec_time = qi.exec_time
+            WHERE
+                qs.query_id = ?
+            ORDER BY
+                qs.max_exec_time DESC
+        `, [queryId]);
+
+        const instances = await this.all(`
+            SELECT * FROM query_instances WHERE query_id = ? ORDER BY timestamp DESC LIMIT 20 
+        `, [queryId]);
+
+        results.instances = instances;
+        return results;
     }
 
     async getQueryStats(queryId: number): Promise<any> {

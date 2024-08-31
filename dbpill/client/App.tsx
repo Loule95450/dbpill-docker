@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, NavLink as RouterNavLink, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, NavLink as RouterNavLink, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Greeting, SocketTester } from 'shared/types';
 import { MainProps } from 'shared/main_props';
 import io from 'socket.io-client';
@@ -8,62 +8,48 @@ import logo from './assets/dbpill.png';
 import './App.css';
 import styled from 'styled-components';
 
+// markdown formatter
+import ReactMarkdown from 'react-markdown';
+
 const Container = styled.div`
   font-family: monospace;
   display: flex;
   flex-direction: column;
   height: 100vh;
+  overflow: auto;
+  background-color: #eee;
+  color: #4a4a4a;
 `;
 
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-`;
-
-const Logo = styled.img`
-  height: 40px;
-`;
-
-const Controls = styled.div`
-  display: flex;
-  gap: 10px;
-`;
-
-const Button = styled.button`
-  padding: 5px 10px;
-  font-family: monospace;
+const TextLogo = styled.div`
+  font-size: 1.5em;
+  font-weight: bold;
+  color: #fff;
 `;
 
 const NavBar = styled.div`
   display: flex;
   gap: 10px;
   padding: 10px;
-  background-color: #e9ecef;
-  border-bottom: 1px solid #dee2e6;
+  background-color: #000;
 `;
 
 const StyledNavLink = styled(RouterNavLink)`
   cursor: pointer;
   text-decoration: none;
-  color: #007bff;
-  font-family: monospace;
-
   padding: 0 5px;
-  background-color: #f8f9fa;
-  line-height: 1.5em;
+  line-height: 20px;
+  height: 20px;
 
-  border: 1px solid transparent;
-
-  &.active {
-    border-color: #007bff;
-  }
+  color: #fff;
+  border-bottom: 1px solid transparent;
 
   &:hover {
-    text-decoration: underline;
+    box-shadow: 0 2px 0 0 #ffffff77;
+  }
+
+  &.active {
+    box-shadow: 0 2px 0 0 #fff;
   }
 `;
 
@@ -76,23 +62,25 @@ const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
   margin-top: 20px;
-  font-family: Arial, sans-serif;
+  background-color: #fff;
 `;
 
 const TableRow = styled.tr`
+  &:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.03);
+  }
 `;
 
 const TableHeader = styled.th`
   padding: 12px;
-  background-color: #007bff;
-  color: white;
-  border: 1px solid #dee2e6;
+  text-align: left;
+  border: 1px solid #d2b48c;
+  background-color: #deb887;
 `;
 
 const TableData = styled.td`
   padding: 12px;
   line-height: 1.2em;
-  border: 1px solid #dee2e6;
   max-width: 20vw;
   vertical-align: top;
   overflow: hidden;
@@ -100,38 +88,225 @@ const TableData = styled.td`
   text-align: center;
 `;
 
-const QueryText = styled.pre`
+const QueryStats = styled.div`
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+`;
+
+const QueryStat = styled.div`
+  padding: 0 2px 2px 2px;
+`;
+
+const QueryText = styled.pre<{ $expanded?: boolean }>`
   text-align: left;
   white-space: pre-wrap;
   max-height: 200px;
   overflow: auto;
-  background-color: #f8f9fa;
   padding: 10px;
   margin: -10px;
   display: block;
+  border-right: 1px solid rgba(0, 0, 0, 0.03);
+  
+  ${props => !props.$expanded && `
+    cursor: pointer;
+    &:hover {
+      outline: 1px solid #000;
+    }
+  `}
+
+  ${props => props.$expanded && `
+    max-height: none;
+  `}
 `;
 
-const QueryParams = styled.pre`
-  white-space: pre-wrap;
-  max-height: 200px;
-  overflow: auto;
+const QuerySort = styled.span`
+  user-select: none;
 `;
 
-const QueryPlan = styled.pre`
-  white-space: pre-wrap;
-  max-height: 200px;
-  overflow: auto;
+const QuerySortOption = styled.span<{ active?: string }>`
+  cursor: pointer;
+  display: inline-block;
+  margin: 0 5px;
+  padding: 0 5px;
+  line-height: 20px;
+  user-select: none;
+  border-bottom: 1px solid #000;
+
+  &:hover {
+    box-shadow: 0 2px 0 0 #00000077;
+  }
+
+  ${props => props.active == 'true' && `
+    box-shadow: 0 2px 0 0 #000;
+  `}
+`;
+
+const RowIndex = styled.span`
+  opacity: 0.2;
+  font-size: 1.2em;
+`;
+
+const ActionButton = styled.button<{ type?: 'main' | 'secondary' | 'revert' }>`
+  padding: 5px 10px;
+  font-family: monospace;
+  background-color: #000;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+
+  ${props => props.type == 'main' && `
+    background-color: #00aa44;
+    color: #fff;
+  `}
+
+  ${props => props.type == 'revert' && `
+    background-color: #ff0000;
+    color: #fff;
+  `}
+
+  &:hover {
+    box-shadow: 0 2px 0 0 #ffffff77;
+  }
+`;
+
+const Block = styled.div`
+  padding: 10px;
+  background-color: #fff;
+  border-radius: 5px;
+`;
+
+const IndexSuggestions = styled.div`
+  padding: 10px;
+  border-radius: 5px;
+
+   & h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    opacity: 0.5;
+    font-weight: normal;
+  }
 `;
 
 const formatNumber = (num: number) => num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function AllQueries() {
-  const [stats, setStats] = useState<any[]>([]);
-  const [orderBy, setOrderBy] = useState<string>('timestamp');
-  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('desc');
+function Query() {
+  const { query_id } = useParams();
+  const [queryData, setQueryData] = useState<any>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    fetch('/api/all_queries', {
+    fetch(`/api/query/${query_id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log(data);
+        setQueryData(data);
+      });
+  }, []);
+
+  const getSuggestions = (query_id: string) => {
+    fetch(`/api/suggest?query_id=${query_id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log(data);
+        setQueryData(data);
+      });
+  };
+
+  const instances = queryData && queryData.instances ? queryData.instances : [];
+
+  return (
+    <div>
+      <h1>Query #{query_id}</h1>
+      {queryData && (
+        <>
+          <QueryText $expanded={true}>{queryData.query}</QueryText>
+        
+          <h2>Stats</h2>
+          <QueryStats>
+            <QueryStat>Max execution time: {formatNumber(queryData.max_exec_time)}ms</QueryStat>
+            <QueryStat>Min execution time: {formatNumber(queryData.min_exec_time)}ms</QueryStat>
+            <QueryStat>Avg execution time: {formatNumber(queryData.avg_exec_time)}ms</QueryStat>
+            <QueryStat>Number of executions: {queryData.num_instances}</QueryStat>
+          </QueryStats>
+          <h2>Individual runs</h2>
+          <Block>
+            {instances.map((instance, index) => (
+              <div>{index}. Params: {instance.params}</div>
+            ))}
+          </Block>
+          <h2>AI Suggestions</h2>
+          <Block>
+            {queryData.llm_response ? (
+              <ReactMarkdown>{queryData.llm_response}</ReactMarkdown>
+            ) : (
+              <ActionButton onClick={() => getSuggestions(queryData.query_id)}>Get suggestions</ActionButton>
+            )}
+          </Block>
+          <h2>AI Suggested Indexes</h2> 
+          <Block><pre>{queryData.suggested_indexes && queryData.suggested_indexes.trim()}</pre></Block>
+          <h2>AI Applied Indexes</h2>
+          <Block>{queryData.applied_indexes ? queryData.applied_indexes : 'None'}</Block>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AllQueries() {
+  const [stats, setStats] = useState<any[]>([]);
+  const [orderBy, setOrderBy] = useState<string>('avg_exec_time');
+  const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('desc');
+  const [loadingSuggestions, setLoadingSuggestions] = useState<{ [key: string]: boolean }>({});
+  const navigate = useNavigate();
+
+  const order = (column: string) => {
+    if (orderBy === column) {
+      setOrderDirection(orderDirection === 'desc' ? 'asc' : 'desc');
+    } else {
+      setOrderDirection('desc');
+    }
+    setOrderBy(column);
+  };
+
+  const getSuggestions = (query_id: string) => {
+    setLoadingSuggestions(prev => ({ ...prev, [query_id]: true }));
+    fetch(`/api/suggest?query_id=${query_id}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        console.log(data);
+        setStats((prevStats) => {
+          const newStats = [...prevStats];
+          const index = newStats.findIndex((stat) => stat.query_id === query_id);
+          newStats[index].llm_response = data.llm_response;
+          newStats[index].suggested_indexes = data.suggested_indexes;
+          newStats[index].applied_indexes = data.applied_indexes;
+          return newStats;
+        });
+      })
+      .finally(() => {
+        setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));
+      });
+  };
+
+  useEffect(() => {
+    fetch('/api/all_queries?orderBy=' + orderBy + '&direction=' + orderDirection, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -143,52 +318,93 @@ function AllQueries() {
         setOrderBy(data.orderBy);
         setOrderDirection(data.orderDirection);
       });
-  }, []);
+  }, [orderBy, orderDirection]);
+
+  const columns = stats[0] ? Object.keys(stats[0]) : [];
+
+  // remove query_id from columns
+  columns.splice(columns.indexOf('query_id'), 1);
 
   return (
     <div>
-      <h1>All Queries</h1>
+      Sort by:
+      <QuerySort>
+        <QuerySortOption 
+          onClick={() => order('max_exec_time')} 
+          active={orderBy === 'max_exec_time' ? 'true' : undefined}
+        >
+          {orderBy === 'max_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Max Execution Time
+        </QuerySortOption>
+        <QuerySortOption 
+          onClick={() => order('min_exec_time')} 
+          active={orderBy === 'min_exec_time' ? 'true' : undefined}
+        >
+          {orderBy === 'min_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Min Execution Time
+        </QuerySortOption>
+        <QuerySortOption 
+          onClick={() => order('avg_exec_time')} 
+          active={orderBy === 'avg_exec_time' ? 'true' : undefined}
+        >
+          {orderBy === 'avg_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Avg Execution Time
+        </QuerySortOption>
+        <QuerySortOption 
+          onClick={() => order('num_instances')} 
+          active={orderBy === 'num_instances' ? 'true' : undefined}
+        >
+          {orderBy === 'num_instances' && (orderDirection === 'asc' ? '▲' : '▼')} Number of Executions
+        </QuerySortOption>
+      </QuerySort>
+
       <Table>
-        <thead>
-          <TableRow>
-            <TableHeader>
-              <a href={`?orderBy=query_id&direction=${orderDirection === 'asc' ? 'desc' : 'asc'}`}>ID {orderBy === 'query_id' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}</a>
-            </TableHeader>
-            <TableHeader>
-              <a href={`?orderBy=query&direction=${orderDirection === 'asc' ? 'desc' : 'asc'}`}>Query {orderBy === 'query' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}</a>
-            </TableHeader>
-            <TableHeader>
-              <a href={`?orderBy=plan_time&direction=${orderDirection === 'asc' ? 'desc' : 'asc'}`}>Plan Time {orderBy === 'plan_time' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}</a>
-            </TableHeader>
-            <TableHeader>
-              <a href={`?orderBy=exec_time&direction=${orderDirection === 'asc' ? 'desc' : 'asc'}`}>Exec Time {orderBy === 'exec_time' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}</a>
-            </TableHeader>
-            <TableHeader>
-              <a href={`?orderBy=timestamp&direction=${orderDirection === 'asc' ? 'desc' : 'asc'}`}>Timestamp {orderBy === 'timestamp' ? (orderDirection === 'asc' ? '▲' : '▼') : ''}</a>
-            </TableHeader>
-          </TableRow>
-        </thead>
         <tbody>
-          {stats.map((stat) => {
-            const formatted_query = stat.query;
+          {stats.map((stat, index) => {
             return (
               <TableRow key={stat.query_id}>
-                <TableData><a href={`/suggest?query_id=${stat.query_id}`}>{stat.query_id}</a></TableData>
-                <TableData><QueryText>{formatted_query}</QueryText></TableData>
-                <TableData>{formatNumber(stat.plan_time)}ms</TableData>
-                <TableData>{formatNumber(stat.exec_time)}ms</TableData>
-                <TableData>{stat.timestamp}</TableData>
+                <TableData><RowIndex>{index + 1}</RowIndex></TableData>
+                <TableData>
+                  <QueryText onClick={() => navigate(`/query/${stat.query_id}`)}>{stat.query}</QueryText>
+                </TableData>
+                <TableData>
+                  <QueryStats>
+                    <QueryStat>Max execution time: {formatNumber(stat.max_exec_time)}ms</QueryStat>
+                    <QueryStat>Min execution time: {formatNumber(stat.min_exec_time)}ms</QueryStat>
+                    <QueryStat>Avg execution time: {formatNumber(stat.avg_exec_time)}ms</QueryStat>
+                    <QueryStat>Number of executions: {stat.num_instances}</QueryStat>
+                  </QueryStats>
+                </TableData>
+                <IndexSuggestions>
+                  <h4>AI Suggested Indexes</h4>
+                  {!stat.llm_response ? (
+                    <ActionButton onClick={() => getSuggestions(stat.query_id)}>Get suggestions</ActionButton>
+                  ) : (
+                    <>
+                      {stat.suggested_indexes && (
+                        <div>
+                          <pre style={{maxWidth: '300px', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{stat.suggested_indexes.trim()}</pre>
+                        </div>
+                      )}
+                      {stat.suggested_indexes && !stat.applied_indexes && (
+                        <ActionButton type="main" onClick={() => getSuggestions(stat.query_id)}>
+                          {loadingSuggestions[stat.query_id] ? 'Loading...' : 'Apply index suggestions'}
+                        </ActionButton>
+                      )}
+                      {stat.applied_indexes && (
+                        <>
+                          <div>✅ Suggestions already applied</div>
+                          <ActionButton type="revert">Revert index changes</ActionButton>
+                        </>
+                      )}
+                    </>
+                  )}
+                  </IndexSuggestions>
               </TableRow>
+
             );
           })}
         </tbody>
       </Table>
     </div>
   );
-}
-
-function SlowQueries() {
-  return <div>Slow Queries</div>;
 }
 
 function Home() {
@@ -205,7 +421,7 @@ function App(mainProps: MainProps) {
     });
 
     socket.on('test', (data: SocketTester) => {
-      setCount(data.counter);
+      // setCount(data.counter);
     });
 
     return () => {
@@ -216,23 +432,16 @@ function App(mainProps: MainProps) {
   return (
     <Router>
       <Container>
-        <Header>
-          <Logo src={logo} alt="logo" />
-          <Controls>
-            <p>Intercepted {count} queries </p>
-            <Button>⏹ Stop</Button>
-          </Controls>
-        </Header>
         <NavBar>
+          <TextLogo>dbpill</TextLogo>
           <StyledNavLink to="/" className={location.pathname === '/' ? 'active' : ''}>Home</StyledNavLink>
-          <StyledNavLink to="/all-queries">All Queries</StyledNavLink>
-          <StyledNavLink to="/slow-queries">Slow Queries</StyledNavLink>
+          <StyledNavLink to="/queries">Queries</StyledNavLink>
         </NavBar>
         <MainContent>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/all-queries" element={<AllQueries />} />
-            <Route path="/slow-queries" element={<SlowQueries />} />
+            <Route path="/queries" element={<AllQueries />} />
+            <Route path="/query/:query_id" element={<Query />} />
           </Routes>
         </MainContent>
       </Container>

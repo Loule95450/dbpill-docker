@@ -31,15 +31,22 @@ export function setup_routes(app: any, io: any) {
 
 
     app.get('/api/all_queries', async (req, res) => {
-        const orderBy = req.query.orderBy as string || 'timestamp';
+        const orderBy = req.query.orderBy as string || 'query_id';
         const orderDirection = req.query.direction as string || 'desc';
-        const stats = await queryLogger.getQueryStatsOrderBy(orderBy, orderDirection);
+        const stats = await queryLogger.getQueryGroups({orderBy, orderDirection});
         res.json({ stats, orderBy, orderDirection: orderDirection.toLowerCase() });
     });
 
     app.get('/api/slow_queries', async (req, res) => {
         const slow_queries = await queryLogger.getSlowQueries();
         res.json({ slow_queries });
+    });
+
+    app.get('/api/query/:query_id', async (req, res) => {
+        const queryId = req.params.query_id as string;
+        const queryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        console.log("AAA", queryData);
+        res.json(queryData);
     });
 
     app.get('/analyze', async (req, res) => {
@@ -58,7 +65,7 @@ export function setup_routes(app: any, io: any) {
         res.json({ query_info });
     });
 
-    app.get('/suggest', async (req, res) => {
+    app.get('/api/suggest', async (req, res) => {
         const queryId = req.query.query_id as string;
         const stats = await queryLogger.getQueryStats(parseInt(queryId));
         function extractRelationNames(plan) {
@@ -123,6 +130,7 @@ ${table_defs.join('\n\n')}
             llm_response: response.text,
             suggested_indexes,
         });
-        res.json({ text: response.text, suggested_indexes });
+        const newQueryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        res.json(newQueryData);
     });
 }
