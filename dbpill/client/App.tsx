@@ -66,6 +66,7 @@ const Table = styled.table`
 `;
 
 const TableRow = styled.tr`
+  background-color: rgba(0, 0, 0, 0.01);
   &:nth-child(even) {
     background-color: rgba(0, 0, 0, 0.03);
   }
@@ -99,8 +100,10 @@ const QueryStat = styled.div`
   padding: 0 2px 2px 2px;
 `;
 
-const PerformanceStat = styled(QueryStat)`
-  color: #00aa44;
+const PerformanceStat = styled(QueryStat)<{ mode?: 'up' | 'down' }>`
+  color: ${(props) => props.mode === undefined ? '#333' : props.mode === 'up' ? '#00aa44' : '#cc0000'};
+  font-size: ${(props) => props.mode === undefined ? '1em' : props.mode === 'up' ? '1.2em' : '1.2em'};
+  line-height: 1.2em;
 `;
 
 const QueryText = styled.pre<{ $expanded?: boolean }>`
@@ -155,11 +158,14 @@ const RowIndex = styled.span`
 const ActionButton = styled.button<{ type?: 'main' | 'secondary' | 'revert' }>`
   padding: 5px 10px;
   font-family: monospace;
-  background-color: #000;
+  background-color: #444;
   color: #fff;
   border: none;
   border-radius: 5px;
   cursor: pointer;
+  line-height: 20px;
+  margin-right: 10px;
+    box-shadow: 0 2px 0 0 rgba(0, 0, 0, 0.03);
 
   ${props => props.type == 'main' && `
     background-color: #00aa44;
@@ -167,12 +173,17 @@ const ActionButton = styled.button<{ type?: 'main' | 'secondary' | 'revert' }>`
   `}
 
   ${props => props.type == 'revert' && `
-    background-color: #ff0000;
-    color: #fff;
+    background-color: #fff;
+    color: #a00;
+  `}
+
+  ${props => props.type == 'secondary' && `
+    background-color: #fff;
+    color: #444;
   `}
 
   &:hover {
-    box-shadow: 0 2px 0 0 #ffffff77;
+    box-shadow: 0 2px 0 0 rgba(0, 0, 0, 0.3);
   }
 `;
 
@@ -202,7 +213,21 @@ const LoadingIndicator = styled.div`
   }
 `;
 
-const formatNumber = (num: number) => num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const SuggestionsApplied = styled.div`
+  color: rgba(0, 30, 0, 0.5);
+  margin-bottom: 10px;
+`;
+
+const GlobalStats = styled.div`
+  color: rgba(0, 30, 0, 0.5);
+  margin-bottom: 10px;
+  text-align: right;
+`;
+
+const formatNumber = (num: number) => {
+  if (!num) return '?';
+  return num > 10 ? Math.round(num).toLocaleString('en-US') : num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 function Query() {
   const { query_id } = useParams();
@@ -256,7 +281,7 @@ function Query() {
           <h2>Individual runs</h2>
           <Block>
             {instances.map((instance, index) => (
-              <div>{index}. Params: {instance.params}</div>
+              <div key={index}>{index}. Params: {instance.params}</div>
             ))}
           </Block>
           <h2>Query plan</h2>
@@ -268,11 +293,15 @@ function Query() {
             {queryData.llm_response ? (
               <ReactMarkdown>{queryData.llm_response}</ReactMarkdown>
             ) : (
-              <ActionButton onClick={() => getSuggestions(queryData.query_id)}>Get suggestions</ActionButton>
+              <ActionButton onClick={() => getSuggestions(queryData.query_id)}>🤖 Get suggestions</ActionButton>
             )}
           </Block>
           <h2>AI Suggested Indexes</h2> 
-          <Block><pre>{queryData.suggested_indexes && queryData.suggested_indexes.trim()}</pre></Block>
+          <Block>
+            <pre>
+              {queryData.suggested_indexes && queryData.suggested_indexes.trim()}
+            </pre>
+          </Block>
           <h2>AI Applied Indexes</h2>
           <Block>{queryData.applied_indexes ? queryData.applied_indexes : 'None'}</Block>
         </>
@@ -286,6 +315,7 @@ function AllQueries() {
   const [orderBy, setOrderBy] = useState<string>('avg_exec_time');
   const [orderDirection, setOrderDirection] = useState<'asc' | 'desc'>('desc');
   const [loadingSuggestions, setLoadingSuggestions] = useState<{ [key: string]: boolean }>({});
+  const [rerunning, setRerunning] = useState<{ [key: string]: boolean }>({});
   const navigate = useNavigate();
 
   const order = (column: string) => {
@@ -377,6 +407,7 @@ function AllQueries() {
           newStats[index].applied_indexes = data.applied_indexes;
           newStats[index].prev_exec_time = data.prev_exec_time;
           newStats[index].new_exec_time = data.new_exec_time;
+          newStats[index].last_exec_time = data.last_exec_time;
           return newStats;
         });
       })
@@ -407,6 +438,9 @@ function AllQueries() {
 
   return (
     <div>
+      <GlobalStats>
+        {stats.length} unique queries captured {stats.reduce((acc, stat) => acc + stat.num_instances, 0)} times
+      </GlobalStats>
       Sort by:
       <QuerySort>
         <QuerySortOption 
@@ -440,21 +474,57 @@ function AllQueries() {
           {stats.map((stat, index) => {
             return (
               <TableRow key={stat.query_id}>
-                <TableData><RowIndex>{index + 1}</RowIndex></TableData>
                 <TableData>
-                  <QueryText onClick={() => navigate(`/query/${stat.query_id}`)}>{stat.query}</QueryText>
+                  <RowIndex>{index + 1}</RowIndex>
+                  {/* <QueryOptionsButton>▼</QueryOptionsButton> */} 
+                  <div onClick={async () => {
+                    await fetch(`/api/ignore_query?query_id=${stat.query_id}`).then(response => response.json()).then(data => {
+                      setStats(prevStats => {
+                        const newStats = [...prevStats.filter(stat2 => stat2.query_id !== stat.query_id)];
+                        return newStats;
+                      });
+                    });
+                  }}></div>
+                </TableData>
+                <TableData>
+                  <QueryText onClick={() => navigate(`/query/${stat.query_id}`)}>
+                    {stat.query.split('\n')[0]}
+                    <span style={{filter: "blur(4px)"}}>{stat.query.split('\n').slice(1).join('\n')}</span>
+                  </QueryText>
                 </TableData>
                 <TableData>
                   <QueryStats>
                     <QueryStat>Max execution time: {formatNumber(stat.max_exec_time)}ms</QueryStat>
                     <QueryStat>Min execution time: {formatNumber(stat.min_exec_time)}ms</QueryStat>
                     <QueryStat>Avg execution time: {formatNumber(stat.avg_exec_time)}ms</QueryStat>
+                    <QueryStat>Last execution time: {formatNumber(stat.last_exec_time)}ms</QueryStat>
                     <QueryStat>Number of executions: {stat.num_instances}</QueryStat>
                   </QueryStats>
+                  <br />
+                  <ActionButton type="secondary" onClick={() => {
+                    setRerunning(prev => ({ ...prev, [stat.query_id]: true }));
+                    fetch(`/api/analyze_query?query_id=${stat.query_id}`).then(response => response.json()).then(data => {
+                      setStats(prevStats => {
+                        const newStats = [...prevStats];
+                        const index = newStats.findIndex((stat2) => stat2.query_id === stat.query_id);
+                        newStats[index].prev_exec_time = data.prev_exec_time;
+                        newStats[index].new_exec_time = data.new_exec_time;
+                        newStats[index].last_exec_time = data.last_exec_time;
+                        newStats[index].num_instances = data.num_instances;
+                        return newStats;
+                      });
+                      setRerunning(prev => ({ ...prev, [stat.query_id]: false }));
+                    });
+                  }}>
+                    {rerunning[stat.query_id] ? (
+                      <LoadingIndicator>Running...</LoadingIndicator>
+                    ) : '🔄 Re-run'}
+                  </ActionButton>
                   {stat.new_exec_time && (
                     <QueryStats>
+                      <br />
                       <PerformanceStat>New execution time: {formatNumber(stat.new_exec_time)}ms</PerformanceStat>
-                      <PerformanceStat>Speed up: {formatNumber(stat.avg_exec_time / stat.new_exec_time)}x</PerformanceStat>
+                      <PerformanceStat mode={stat.new_exec_time < stat.last_exec_time ? 'up' : 'down'}>Performance: {stat.new_exec_time < stat.last_exec_time ? '⬆' : '⬇'}{formatNumber(stat.avg_exec_time / stat.new_exec_time)}⨉ </PerformanceStat>
                     </QueryStats>
                   )}
                 </TableData>
@@ -465,46 +535,49 @@ function AllQueries() {
                       <ActionButton onClick={() => getSuggestions(stat.query_id)}>
                         {loadingSuggestions[stat.query_id] ? (
                           <LoadingIndicator>Getting suggestions...</LoadingIndicator>
-                        ) : 'Get suggestions'}
+                        ) : '🤖 Get suggestions'}
                       </ActionButton>
                     ) : (
                       <>
                         {stat.suggested_indexes && (
                           <div>
-                            <pre style={{maxWidth: '300px', whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>{stat.suggested_indexes.trim()}</pre>
+                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
+                              {stat.suggested_indexes.trim().slice(0, 20)}
+                              <span style={{filter: "blur(3px)"}}>{stat.suggested_indexes.trim().slice(20)}</span>
+                            </pre>
                           </div>
                         )}
                         {stat.suggested_indexes && !stat.applied_indexes && (
                           <>
+                          <ActionButton type="secondary" onClick={() => {
+                            setStats(prevStats => {
+                              const newStats = [...prevStats];
+                              const index = newStats.findIndex((stat2) => stat2.query_id === stat.query_id);
+                              newStats[index].llm_response = null;
+                              newStats[index].suggested_indexes = null;
+                              newStats[index].applied_indexes = null;
+                              newStats[index].prev_exec_time = null;
+                              newStats[index].new_exec_time = null;
+                              return newStats;
+                            });
+                            getSuggestions(stat.query_id);
+                          }}>
+                            🔄
+                          </ActionButton>
                             <ActionButton type="main" onClick={() => applySuggestions(stat.query_id)}>
                               {loadingSuggestions[stat.query_id] ? (
                                 <LoadingIndicator>Applying suggestions...</LoadingIndicator>
-                              ) : 'Apply index suggestions'}
-                            </ActionButton>
-                            <ActionButton onClick={() => {
-                              setStats(prevStats => {
-                                const newStats = [...prevStats];
-                                const index = newStats.findIndex((stat) => stat.query_id === stat.query_id);
-                                newStats[index].llm_response = null;
-                                newStats[index].suggested_indexes = null;
-                                newStats[index].applied_indexes = null;
-                                newStats[index].prev_exec_time = null;
-                                newStats[index].new_exec_time = null;
-                                return newStats;
-                              });
-                              getSuggestions(stat.query_id);
-                            }}>
-                              Reload
+                              ) : '⏬ Apply index suggestions'}
                             </ActionButton>
                           </>
                         )}
                         {stat.applied_indexes && (
                           <>
-                            <div>✅ Suggestions already applied</div>
+                            <SuggestionsApplied>✅ Suggestions already applied</SuggestionsApplied>
                             <ActionButton type="revert" onClick={() => revertSuggestions(stat.query_id)}>
                               {loadingSuggestions[stat.query_id] ? (
-                                <LoadingIndicator>Reverting suggestions...</LoadingIndicator>
-                              ) : 'Revert index changes'}
+                                <LoadingIndicator>Reverting indexes...</LoadingIndicator>
+                              ) : '⏫ Revert'}
                             </ActionButton>
                           </>
                         )}
@@ -518,6 +591,52 @@ function AllQueries() {
           })}
         </tbody>
       </Table>
+    </div>
+  );
+}
+
+function AllAppliedIndexes() {
+  const [indexes, setIndexes] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetch('/api/get_all_applied_indexes', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        setIndexes(data);
+      });
+  }, []);
+
+  return (
+    <div>
+      <h1>Applied Indexes</h1>
+      <Block>
+        <ActionButton onClick={async () => {
+          fetch('/api/revert_all_suggestions').then(response => response.json()).then(data => {
+            setIndexes(data);
+          });
+        }}>Revert All Suggestions</ActionButton>
+      </Block>
+      <Block>
+        <Table>
+          <tbody>
+            {indexes.map((indexData: any, index) => (
+              <TableRow key={index}>
+                <TableData>{indexData.index_name}</TableData>
+                <TableData>{indexData.table_name}</TableData>
+                <TableData>{indexData.column_name}</TableData>
+                <TableData>{indexData.is_unique ? 'UNIQUE' : 'NON-UNIQUE'}</TableData>
+                <TableData>{indexData.is_primary ? 'PRIMARY' : 'NON-PRIMARY'}</TableData>
+                <TableData>{indexData.index_definition}</TableData>
+              </TableRow>
+            ))}
+          </tbody>
+        </Table>
+      </Block>
     </div>
   );
 }
@@ -551,12 +670,14 @@ function App(mainProps: MainProps) {
           <TextLogo>dbpill</TextLogo>
           <StyledNavLink to="/" className={location.pathname === '/' ? 'active' : ''}>Home</StyledNavLink>
           <StyledNavLink to="/queries">Queries</StyledNavLink>
+          <StyledNavLink to="/indexes">Indexes</StyledNavLink>
         </NavBar>
         <MainContent>
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/queries" element={<AllQueries />} />
             <Route path="/query/:query_id" element={<Query />} />
+            <Route path="/indexes" element={<AllAppliedIndexes />} />
           </Routes>
         </MainContent>
       </Container>

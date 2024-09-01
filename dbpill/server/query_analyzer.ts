@@ -181,7 +181,7 @@ export class QueryAnalyzer {
 
   async saveAnalysis({ sessionId, query, params, queryPlan, planTime, execTime }: any) {
     query = formatQuery(query, { language: 'postgresql', denseOperators: true });
-    this.logger.addQueryStats({
+    await this.logger.addQueryStats({
       sessionId,
       query,
       params: JSON.stringify(params, null, 2),
@@ -203,6 +203,39 @@ export class QueryAnalyzer {
     } catch (error) {
       console.error(indexes);
       console.error('Error applying indexes:', error);
+      throw error;
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+  }
+
+  async getAllAppliedIndexes(): Promise<any[]> {
+    const client = await this.pool.connect();
+    try {
+      const indexes = await client.query(`
+        SELECT
+            i.relname AS index_name,
+            t.relname AS table_name,
+            a.attname AS column_name,
+            ix.indisunique AS is_unique,
+            ix.indisprimary AS is_primary,
+            pg_catalog.pg_get_indexdef(ix.indexrelid) AS index_definition
+        FROM
+            pg_catalog.pg_class t
+            JOIN pg_catalog.pg_index ix ON t.oid = ix.indrelid
+            JOIN pg_catalog.pg_class i ON ix.indexrelid = i.oid
+            JOIN pg_catalog.pg_attribute a ON a.attnum = ANY(ix.indkey) AND a.attrelid = t.oid
+        WHERE
+            t.relkind = 'r'  -- only tables
+            AND i.relname LIKE 'dbpill_%'
+        ORDER BY
+            t.relname, i.relname;
+        `);
+      return indexes.rows;
+    } catch (error) {
+      console.error('Error getting all applied indexes:', error);
       throw error;
     } finally {
       if (client) {

@@ -161,8 +161,12 @@ class AdvancedPostgresProxySession implements IAdvancedProxySession {
         if(query.query.trim() == 'BEGIN' || query.query.trim() == 'COMMIT' || query.query.trim() == 'ROLLBACK') {
             return;
         }
-        const analysis = await queryAnalyzer.analyze({query: query.query, params: query.params});
-        queryAnalyzer.saveAnalysis(analysis);
+        try {
+            const analysis = await queryAnalyzer.analyze({query: query.query, params: query.params});
+            queryAnalyzer.saveAnalysis(analysis);
+        } catch (error) {
+            console.error('Error analyzing query:', error);
+        }
     }
 }
 

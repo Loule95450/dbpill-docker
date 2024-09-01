@@ -43,7 +43,22 @@ export function setup_routes(app: any, io: any) {
         console.log("AAA", queryData);
         res.json(queryData);
     });
-    
+
+    app.get('/api/analyze_query', async (req, res) => {
+        const queryId = req.query.query_id as string;
+        const queryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        const instances = await queryLogger.getQueryInstances(parseInt(queryId));
+
+        const random_instance = instances[Math.floor(Math.random() * instances.length)];
+        const params = JSON.parse(random_instance.params);
+        const analysis = await queryAnalyzer.analyze({query: queryData.query, params});
+        await queryAnalyzer.saveAnalysis(analysis);
+
+        const newQueryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        res.json(newQueryData);
+
+    });
+
     app.get('/api/apply_suggestions', async (req, res) => {
         const queryId = req.query.query_id as string;
         const stats = await queryLogger.getQueryGroup(parseInt(queryId));
@@ -98,11 +113,33 @@ export function setup_routes(app: any, io: any) {
         res.json(newQueryData);
     });
 
+    app.get('/api/ignore_query', async (req, res) => {
+        const queryId = req.query.query_id as string;
+        await queryLogger.updateQueryStats(parseInt(queryId), {
+            hidden: true
+        });
+        const newQueryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        res.json(newQueryData);
+    });
+
+    app.get('/api/revert_all_suggestions', async (req, res) => {
+        const indexes = await queryAnalyzer.getAllAppliedIndexes();
+        const drop_statement = indexes.map(index => `DROP INDEX IF EXISTS ${index.index_name};`).join('\n');
+        await queryAnalyzer.applyIndexes(drop_statement);
+        const newIndexes = await queryAnalyzer.getAllAppliedIndexes();
+        res.json(newIndexes);
+    });
+
     app.get('/view_suggestion', async (req, res) => {
         const queryId = req.query.query_id as string;
         const query_info = await queryLogger.getQueryStats(parseInt(queryId));
         // res.render('view_suggestion', { query_info });
         res.json({ query_info });
+    });
+
+    app.get('/api/get_all_applied_indexes', async (req, res) => {
+        const indexes = await queryAnalyzer.getAllAppliedIndexes();
+        res.json(indexes);
     });
 
     app.get('/api/suggest', async (req, res) => {
@@ -144,11 +181,13 @@ export function setup_routes(app: any, io: any) {
 
         const table_defs = await Promise.all(tables.map(table => queryAnalyzer.getTableStructure(table)));
 
-        const prompt = `Given the following PostgreSQL query, query plan & table definitions, suggest index improvements that would result in significantly faster query execution. List out your proposed improvements and explain the reasoning. After the list, pick only the improvements that would lead to drastic change (you can ignore minor improvements). Then, provide a single code block with all the index proposals together at the end. i.e.:
+        const prompt = `Given the following PostgreSQL query, query plan & table definitions, suggest index improvements that would result in significantly faster query execution. List out your proposed improvements and explain the reasoning. After the list, pick only the improvements that would lead to drastic change (you can ignore your previous ideas that may only lead to minor improvements). Then, provide a single code block with all the index proposals together at the end. i.e.:
 \`\`\`sql
 CREATE INDEX dbpill_index_name ON table_name (column_name);
 CREATE INDEX dbpill_index_name_upper ON table_name (UPPER(column_name));
 \`\`\`
+
+Make sure the suggested indexes are to improve the provided query specifically, not other hypothetical queries. Pay close attention to the query, and make sure any data transformation in the where clause is also applied to the index declaration.
 
 Always prefix the index name with dbpill_ to avoid conflicts with existing indexes.
 
@@ -158,12 +197,14 @@ ${stats.query}
 
 ** Query Plan **
 
-${queryPlan}
+${JSON.stringify(queryPlan, null, 2)}
 
 ** Table Definitions **
 
 ${table_defs.join('\n\n')}
 `;
+
+        console.log(prompt);
 
         res.header('Content-Type', 'text/plain');
         const response = await prompt_claude({ prompt, temperature: 0 });

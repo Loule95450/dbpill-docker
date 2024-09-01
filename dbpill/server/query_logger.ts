@@ -26,6 +26,8 @@ export interface QueryGroup {
     min_exec_time: number;
     max_exec_time: number;
     avg_exec_time: number;
+    last_exec_time: number;
+    hidden?: boolean;
 }
 
 export class QueryLogger {
@@ -49,7 +51,8 @@ export class QueryLogger {
                 suggested_indexes TEXT,
                 applied_indexes TEXT,
                 prev_exec_time REAL,
-                new_exec_time REAL
+                new_exec_time REAL,
+                hidden BOOLEAN DEFAULT 0
             )
         `);
 
@@ -143,11 +146,14 @@ export class QueryLogger {
                     COUNT(qi.instance_id) AS num_instances,
                     MAX(qi.exec_time) AS max_exec_time,
                     MIN(qi.exec_time) AS min_exec_time,
-                    AVG(qi.exec_time) AS avg_exec_time
+                    AVG(qi.exec_time) AS avg_exec_time,
+                    FIRST_VALUE(qi.exec_time) OVER (PARTITION BY q.query_id ORDER BY qi.instance_id DESC) AS last_exec_time
+
                 FROM
                     queries q
                 JOIN
                     query_instances qi ON q.query_id = qi.query_id
+                WHERE NOT q.hidden
                 GROUP BY
                     q.query_id, q.query
             ),
@@ -170,6 +176,7 @@ export class QueryLogger {
                 qs.avg_exec_time,
                 qs.prev_exec_time,
                 qs.new_exec_time,
+                qs.last_exec_time,
                 qs.llm_response,
                 qs.suggested_indexes,
                 qs.applied_indexes,
@@ -200,7 +207,8 @@ export class QueryLogger {
                     COUNT(qi.instance_id) AS num_instances,
                     MAX(qi.exec_time) AS max_exec_time,
                     MIN(qi.exec_time) AS min_exec_time,
-                    AVG(qi.exec_time) AS avg_exec_time
+                    AVG(qi.exec_time) AS avg_exec_time,
+                    FIRST_VALUE(qi.exec_time) OVER (PARTITION BY q.query_id ORDER BY qi.instance_id DESC) AS last_exec_time
                 FROM
                     queries q
                 JOIN
@@ -216,6 +224,7 @@ export class QueryLogger {
                 qs.avg_exec_time,
                 qs.prev_exec_time,
                 qs.new_exec_time,
+                qs.last_exec_time,
                 qs.llm_response,
                 qs.suggested_indexes,
                 qs.applied_indexes,
