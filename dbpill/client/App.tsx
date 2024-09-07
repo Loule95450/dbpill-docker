@@ -19,6 +19,18 @@ const Container = styled.div`
   overflow: auto;
   background-color: #eee;
   color: #4a4a4a;
+
+
+  & code {
+    background-color: rgba(0, 0, 0, 0.1);
+    padding: 2px 4px;
+    border-radius: 4px;
+  }
+    & pre > code {
+    display: block;
+    padding: 5px 7px;
+    border-radius: 0;
+  }
 `;
 
 const TextLogo = styled.div`
@@ -100,7 +112,7 @@ const QueryStat = styled.div`
   padding: 0 2px 2px 2px;
 `;
 
-const PerformanceStat = styled(QueryStat)<{ mode?: 'up' | 'down' }>`
+const PerformanceStat = styled(QueryStat) <{ mode?: 'up' | 'down' }>`
   color: ${(props) => props.mode === undefined ? '#333' : props.mode === 'up' ? '#00aa44' : '#cc0000'};
   font-size: ${(props) => props.mode === undefined ? '1em' : props.mode === 'up' ? '1.2em' : '1.2em'};
   line-height: 1.2em;
@@ -126,6 +138,7 @@ const QueryText = styled.pre<{ $expanded?: boolean }>`
   ${props => props.$expanded && `
     max-height: none;
   `}
+
 `;
 
 const QuerySort = styled.span`
@@ -224,6 +237,30 @@ const GlobalStats = styled.div`
   text-align: right;
 `;
 
+const StatTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  display: inline-block;
+`;
+
+const StatRow = styled.tr`
+`;
+
+const StatHeader = styled.th`
+  text-align: left;
+`;
+
+const StatCell = styled.td`
+
+`;
+
+const StatValue = styled.div<{ mode?: 'up' | 'down' }>`
+  color: ${(props) => props.mode === undefined ? '#333' : props.mode === 'up' ? '#00aa44' : '#cc0000'};
+  font-size: ${(props) => props.mode === undefined ? '1em' : props.mode === 'up' ? '1.2em' : '1.2em'};
+  line-height: 1.2em;
+`;
+
 const formatNumber = (num: number) => {
   if (!num) return '?';
   return num > 10 ? Math.round(num).toLocaleString('en-US') : num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -270,7 +307,7 @@ function Query() {
       {queryData && (
         <>
           <QueryText $expanded={true}>{queryData.query}</QueryText>
-        
+
           <h2>Stats</h2>
           <QueryStats>
             <QueryStat>Max execution time: {formatNumber(queryData.max_exec_time)}ms</QueryStat>
@@ -296,7 +333,7 @@ function Query() {
               <ActionButton onClick={() => getSuggestions(queryData.query_id)}>🤖 Get suggestions</ActionButton>
             )}
           </Block>
-          <h2>AI Suggested Indexes</h2> 
+          <h2>AI Suggested Indexes</h2>
           <Block>
             <pre>
               {queryData.suggested_indexes && queryData.suggested_indexes.trim()}
@@ -328,7 +365,7 @@ function AllQueries() {
   };
 
   const getSuggestions = (query_id: string) => {
-    if(loadingSuggestions[query_id]) {
+    if (loadingSuggestions[query_id]) {
       return;
     }
     setLoadingSuggestions(prev => ({ ...prev, [query_id]: true }));
@@ -356,7 +393,7 @@ function AllQueries() {
   };
 
   const applySuggestions = (query_id: string) => {
-    if(loadingSuggestions[query_id]) {
+    if (loadingSuggestions[query_id]) {
       return;
     }
     setLoadingSuggestions(prev => ({ ...prev, [query_id]: true }));
@@ -368,6 +405,10 @@ function AllQueries() {
     })
       .then((response) => response.json())
       .then((data) => {
+        if (data.error) {
+          alert(data.error);
+          return;
+        }
         console.log(data);
         setStats((prevStats) => {
           const newStats = [...prevStats];
@@ -386,7 +427,7 @@ function AllQueries() {
   };
 
   const revertSuggestions = (query_id: string) => {
-    if(loadingSuggestions[query_id]) {
+    if (loadingSuggestions[query_id]) {
       return;
     }
     setLoadingSuggestions(prev => ({ ...prev, [query_id]: true }));
@@ -443,29 +484,35 @@ function AllQueries() {
       </GlobalStats>
       Sort by:
       <QuerySort>
-        <QuerySortOption 
-          onClick={() => order('max_exec_time')} 
+        <QuerySortOption
+          onClick={() => order('max_exec_time')}
           active={orderBy === 'max_exec_time' ? 'true' : undefined}
         >
           {orderBy === 'max_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Max Execution Time
         </QuerySortOption>
-        <QuerySortOption 
-          onClick={() => order('min_exec_time')} 
+        <QuerySortOption
+          onClick={() => order('min_exec_time')}
           active={orderBy === 'min_exec_time' ? 'true' : undefined}
         >
           {orderBy === 'min_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Min Execution Time
         </QuerySortOption>
-        <QuerySortOption 
-          onClick={() => order('avg_exec_time')} 
+        <QuerySortOption
+          onClick={() => order('avg_exec_time')}
           active={orderBy === 'avg_exec_time' ? 'true' : undefined}
         >
           {orderBy === 'avg_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Avg Execution Time
         </QuerySortOption>
-        <QuerySortOption 
-          onClick={() => order('num_instances')} 
+        <QuerySortOption
+          onClick={() => order('num_instances')}
           active={orderBy === 'num_instances' ? 'true' : undefined}
         >
           {orderBy === 'num_instances' && (orderDirection === 'asc' ? '▲' : '▼')} Number of Executions
+        </QuerySortOption>
+        <QuerySortOption
+          onClick={() => order('prev_exec_time/new_exec_time')}
+          active={orderBy === 'prev_exec_time/new_exec_time' ? 'true' : undefined}
+        >
+          {orderBy === 'prev_exec_time/new_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Performance
         </QuerySortOption>
       </QuerySort>
 
@@ -476,7 +523,7 @@ function AllQueries() {
               <TableRow key={stat.query_id}>
                 <TableData>
                   <RowIndex>{index + 1}</RowIndex>
-                  {/* <QueryOptionsButton>▼</QueryOptionsButton> */} 
+                  {/* <QueryOptionsButton>▼</QueryOptionsButton> */}
                   <div onClick={async () => {
                     await fetch(`/api/ignore_query?query_id=${stat.query_id}`).then(response => response.json()).then(data => {
                       setStats(prevStats => {
@@ -488,17 +535,42 @@ function AllQueries() {
                 </TableData>
                 <TableData>
                   <QueryText onClick={() => navigate(`/query/${stat.query_id}`)}>
-                    {stat.query.split('\n')[0]}
-                    <span style={{filter: "blur(4px)"}}>{stat.query.split('\n').slice(1).join('\n')}</span>
+                    {/* {stat.query.split('\n')[0]}
+                    <span style={{filter: "blur(4px)"}}>{stat.query.split('\n').slice(1).join('\n')}</span> */}
+                    {stat.query}
                   </QueryText>
                 </TableData>
                 <TableData>
                   <QueryStats>
-                    <QueryStat>Max execution time: {formatNumber(stat.max_exec_time)}ms</QueryStat>
+                    Ran {stat.num_instances} times
+                    <StatTable>
+                      <tbody>
+                      <StatRow>
+                        <StatHeader>Timings</StatHeader>
+                      </StatRow>
+                      <StatRow>
+                        <StatCell>Max</StatCell>
+                        <StatCell>{formatNumber(stat.max_exec_time)}ms</StatCell>
+                      </StatRow>
+                      <StatRow>
+                        <StatCell>Min</StatCell>
+                        <StatCell>{formatNumber(stat.min_exec_time)}ms</StatCell>
+                      </StatRow>
+                      <StatRow>
+                        <StatCell>Avg</StatCell>
+                        <StatCell>{formatNumber(stat.avg_exec_time)}ms</StatCell>
+                      </StatRow>
+                      <StatRow>
+                        <StatCell>Last</StatCell>
+                        <StatCell>{formatNumber(stat.last_exec_time)}ms</StatCell>
+                      </StatRow>
+                      </tbody>
+                    </StatTable>
+                    {/* <QueryStat>Max execution time: {formatNumber(stat.max_exec_time)}ms</QueryStat>
                     <QueryStat>Min execution time: {formatNumber(stat.min_exec_time)}ms</QueryStat>
                     <QueryStat>Avg execution time: {formatNumber(stat.avg_exec_time)}ms</QueryStat>
                     <QueryStat>Last execution time: {formatNumber(stat.last_exec_time)}ms</QueryStat>
-                    <QueryStat>Number of executions: {stat.num_instances}</QueryStat>
+                    <QueryStat>Number of executions: {stat.num_instances}</QueryStat> */}
                   </QueryStats>
                   <br />
                   <ActionButton type="secondary" onClick={() => {
@@ -516,15 +588,34 @@ function AllQueries() {
                       setRerunning(prev => ({ ...prev, [stat.query_id]: false }));
                     });
                   }}>
-                    {rerunning[stat.query_id] ? (
+
+                    {!loadingSuggestions[stat.query_id] && rerunning[stat.query_id] ? (
                       <LoadingIndicator>Running...</LoadingIndicator>
                     ) : '🔄 Re-run'}
+
                   </ActionButton>
                   {stat.new_exec_time && (
                     <QueryStats>
-                      <br />
-                      <PerformanceStat>New execution time: {formatNumber(stat.new_exec_time)}ms</PerformanceStat>
-                      <PerformanceStat mode={stat.new_exec_time < stat.last_exec_time ? 'up' : 'down'}>Performance: {stat.new_exec_time < stat.last_exec_time ? '⬆' : '⬇'}{formatNumber(stat.avg_exec_time / stat.new_exec_time)}⨉ </PerformanceStat>
+                      <StatTable>
+                        <tbody>
+                        <StatRow>
+                          <StatCell>Prev time</StatCell>
+                          <StatCell>{formatNumber(stat.prev_exec_time)}ms</StatCell>
+                        </StatRow>
+                        <StatRow>
+                          <StatCell>New time</StatCell>
+                          <StatCell>{formatNumber(stat.new_exec_time)}ms</StatCell>
+                        </StatRow>
+                        <StatRow>
+                          <StatCell>Performance</StatCell>
+                          <StatCell>
+                            <StatValue mode={stat.new_exec_time < stat.prev_exec_time ? 'up' : 'down'}>
+                              {stat.new_exec_time < stat.prev_exec_time ? '⬆' : '⬇'}{formatNumber(stat.prev_exec_time / stat.new_exec_time)}⨉
+                            </StatValue>
+                          </StatCell>
+                        </StatRow>
+                        </tbody>
+                      </StatTable>
                     </QueryStats>
                   )}
                 </TableData>
@@ -541,29 +632,30 @@ function AllQueries() {
                       <>
                         {stat.suggested_indexes && (
                           <div>
-                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word'}}>
-                              {stat.suggested_indexes.trim().slice(0, 20)}
-                              <span style={{filter: "blur(3px)"}}>{stat.suggested_indexes.trim().slice(20)}</span>
+                            <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                              {/* {stat.suggested_indexes.trim().slice(0, 20)} */}
+                              {/* <span style={{filter: "blur(3px)"}}>{stat.suggested_indexes.trim().slice(20)}</span> */}
+                              {stat.suggested_indexes.trim()}
                             </pre>
                           </div>
                         )}
                         {stat.suggested_indexes && !stat.applied_indexes && (
                           <>
-                          <ActionButton type="secondary" onClick={() => {
-                            setStats(prevStats => {
-                              const newStats = [...prevStats];
-                              const index = newStats.findIndex((stat2) => stat2.query_id === stat.query_id);
-                              newStats[index].llm_response = null;
-                              newStats[index].suggested_indexes = null;
-                              newStats[index].applied_indexes = null;
-                              newStats[index].prev_exec_time = null;
-                              newStats[index].new_exec_time = null;
-                              return newStats;
-                            });
-                            getSuggestions(stat.query_id);
-                          }}>
-                            🔄
-                          </ActionButton>
+                            <ActionButton type="secondary" onClick={() => {
+                              setStats(prevStats => {
+                                const newStats = [...prevStats];
+                                const index = newStats.findIndex((stat2) => stat2.query_id === stat.query_id);
+                                newStats[index].llm_response = null;
+                                newStats[index].suggested_indexes = null;
+                                newStats[index].applied_indexes = null;
+                                newStats[index].prev_exec_time = null;
+                                newStats[index].new_exec_time = null;
+                                return newStats;
+                              });
+                              getSuggestions(stat.query_id);
+                            }}>
+                              🔄
+                            </ActionButton>
                             <ActionButton type="main" onClick={() => applySuggestions(stat.query_id)}>
                               {loadingSuggestions[stat.query_id] ? (
                                 <LoadingIndicator>Applying suggestions...</LoadingIndicator>
@@ -583,8 +675,8 @@ function AllQueries() {
                         )}
                       </>
                     )}
-                    </IndexSuggestions>
-                  </TableData>
+                  </IndexSuggestions>
+                </TableData>
               </TableRow>
 
             );

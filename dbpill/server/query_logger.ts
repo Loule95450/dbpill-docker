@@ -71,7 +71,7 @@ export class QueryLogger {
         `);
 
         const num_rows = await this.get('SELECT COUNT(*) as count FROM queries');
-        console.log('Database initialized with', num_rows.count, 'rows');
+        // console.log('Database initialized with', num_rows.count, 'rows');
     }
 
     private checkDb(): void {
@@ -132,119 +132,104 @@ export class QueryLogger {
 
     }
 
-    async getQueryGroups({orderBy, orderDirection}: { orderBy: string, orderDirection: string}): Promise<any> {
-        const results: QueryGroup[] = await this.all(`
-            WITH query_stats AS (
-                SELECT
-                    q.query_id,
-                    q.query,
-                    q.llm_response,
-                    q.suggested_indexes,
-                    q.applied_indexes,
-                    q.prev_exec_time,
-                    q.new_exec_time,
-                    COUNT(qi.instance_id) AS num_instances,
-                    MAX(qi.exec_time) AS max_exec_time,
-                    MIN(qi.exec_time) AS min_exec_time,
-                    AVG(qi.exec_time) AS avg_exec_time,
-                    FIRST_VALUE(qi.exec_time) OVER (PARTITION BY q.query_id ORDER BY qi.instance_id DESC) AS last_exec_time
+    async getQueryGroups({orderBy, orderDirection, queryId}: { orderBy: string, orderDirection: string, queryId?: number}): Promise<any> {
+        let results: QueryGroup[] = await this.all(`
+WITH query_stats AS (
+  SELECT
+    q.query_id,
+    q.query,
+    q.llm_response,
+    q.suggested_indexes,
+    q.applied_indexes,
+    q.prev_exec_time,
+    q.new_exec_time,
+    COUNT(q.query_id) AS num_instances,
+    MAX(qi.exec_time) AS max_exec_time,
+    MIN(qi.exec_time) AS min_exec_time,
+    AVG(qi.exec_time) AS avg_exec_time
+  FROM
+    queries q
+  JOIN
+    query_instances qi ON q.query_id = qi.query_id
+  GROUP BY
+    q.query_id, q.query, q.llm_response, q.suggested_indexes, q.applied_indexes, q.prev_exec_time, q.new_exec_time
+),
+max_exec_query AS (
+  SELECT
+    query_id,
+    query,
+    max_exec_time
+  FROM
+    query_stats
+  ORDER BY
+    max_exec_time DESC
+  LIMIT 1
+)
+SELECT
+  qs.query_id,
+  qs.query,
+  qs.max_exec_time,
+  qs.min_exec_time,
+  qs.avg_exec_time,
+  qs.prev_exec_time,
+  qs.new_exec_time,
+  qs.llm_response,
+  qs.suggested_indexes,
+  qs.applied_indexes,
+  qs.num_instances
+FROM
+  query_stats qs
+LEFT JOIN
+  max_exec_query meq ON qs.query_id = meq.query_id
+LEFT JOIN
+  query_instances qi ON qs.query_id = qi.query_id AND qs.max_exec_time = qi.exec_time
+${queryId ? `WHERE qs.query_id = ?` : ''}
+ORDER BY
+  qs.${orderBy} ${orderDirection};
+        `, [queryId]);
 
-                FROM
-                    queries q
-                JOIN
-                    query_instances qi ON q.query_id = qi.query_id
-                WHERE NOT q.hidden
-                GROUP BY
-                    q.query_id, q.query
-            ),
-            max_exec_query AS (
-                SELECT
-                    query_id,
-                    query,
-                    max_exec_time
-                FROM
-                    query_stats
-                ORDER BY
-                    max_exec_time DESC
-                LIMIT 1
-            )
-            SELECT
-                qs.query_id,
-                qs.query,
-                qs.max_exec_time,
-                qs.min_exec_time,
-                qs.avg_exec_time,
-                qs.prev_exec_time,
-                qs.new_exec_time,
-                qs.last_exec_time,
-                qs.llm_response,
-                qs.suggested_indexes,
-                qs.applied_indexes,
-                qs.num_instances
-            FROM
-                query_stats qs
-            LEFT JOIN
-                max_exec_query meq ON qs.query_id = meq.query_id
-            LEFT JOIN
-                query_instances qi ON qs.query_id = qi.query_id AND qs.max_exec_time = qi.exec_time
-            ORDER BY
-                qs.${orderBy} ${orderDirection};
-        `);
+        const query_ids = results.map(result => result.query_id);
+        const query = `
+            SELECT qi.*
+            FROM query_instances qi
+            JOIN (
+                SELECT query_id, MAX(timestamp) as max_timestamp
+                FROM query_instances
+                WHERE query_id IN (${query_ids.map(id => `?`).join(',')})
+                GROUP BY query_id
+            ) latest ON qi.query_id = latest.query_id AND qi.timestamp = latest.max_timestamp
+            ORDER BY qi.query_id;
+
+        `;
+
+        const last_instances = await this.all(query, query_ids);
+
+        for(let i = 0; i < results.length; i++) {
+            const result = results[i];
+            const last_instance = last_instances.find(row => row.query_id == result.query_id);
+            if(last_instance) {
+                results[i].last_exec_time = last_instance.exec_time;
+            }
+        }
+
         return results;
     }
 
     async getQueryGroup(queryId: number): Promise<any> {
-        const results = await this.get(`
-            WITH query_stats AS (
-                SELECT
-                    q.query_id,
-                    q.query,
-                    q.llm_response,
-                    q.suggested_indexes,
-                    q.applied_indexes,
-                    q.prev_exec_time,
-                    q.new_exec_time,
-                    COUNT(qi.instance_id) AS num_instances,
-                    MAX(qi.exec_time) AS max_exec_time,
-                    MIN(qi.exec_time) AS min_exec_time,
-                    AVG(qi.exec_time) AS avg_exec_time,
-                    FIRST_VALUE(qi.exec_time) OVER (PARTITION BY q.query_id ORDER BY qi.instance_id DESC) AS last_exec_time
-                FROM
-                    queries q
-                JOIN
-                    query_instances qi ON q.query_id = qi.query_id
-                GROUP BY
-                    q.query_id, q.query
-            )
-            SELECT
-                qs.query_id,
-                qs.query,
-                qs.max_exec_time,
-                qs.min_exec_time,
-                qs.avg_exec_time,
-                qs.prev_exec_time,
-                qs.new_exec_time,
-                qs.last_exec_time,
-                qs.llm_response,
-                qs.suggested_indexes,
-                qs.applied_indexes,
-                qs.num_instances
-            FROM
-                query_stats qs
-            LEFT JOIN
-                query_instances qi ON qs.query_id = qi.query_id AND qs.max_exec_time = qi.exec_time
-            WHERE
-                qs.query_id = ?
-            ORDER BY
-                qs.max_exec_time DESC
-        `, [queryId]);
+        const results = await this.getQueryGroups({orderBy: 'max_exec_time', orderDirection: 'desc', queryId});
+
+        if(results.length == 0) {
+            return null;
+        }
+        
+        const result = results[0];
 
         const instances = await this.all(`
             SELECT * FROM query_instances WHERE query_id = ? ORDER BY timestamp DESC LIMIT 20 
         `, [queryId]);
 
-        results.instances = instances;
-        return results;
+        result.instances = instances;
+        return result;
     }
 
     async getQueryInstances(queryId: number): Promise<any[]> {

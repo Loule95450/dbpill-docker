@@ -203,6 +203,9 @@ export class QueryAnalyzer {
     } catch (error) {
       console.error(indexes);
       console.error('Error applying indexes:', error);
+      await client.query(`
+        ROLLBACK;
+      `);
       throw error;
     } finally {
       if (client) {
