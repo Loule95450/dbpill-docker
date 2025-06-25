@@ -23,7 +23,7 @@ export class QueryAnalyzer {
     this.pool = new Pool({ connectionString });
     this.sessionId = Math.random().toString(36).substring(2, 8);
 
-    const logger = new QueryLogger('queries.db');
+    const logger = new QueryLogger('dbpill.sqlite.db');
     this.logger = logger;
   }
 

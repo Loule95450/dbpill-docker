@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, createContext, useContext } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink as RouterNavLink, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { Greeting, SocketTester } from 'shared/types';
 import { MainProps } from 'shared/main_props';
@@ -10,6 +10,8 @@ import styled from 'styled-components';
 
 // markdown formatter
 import ReactMarkdown from 'react-markdown';
+
+const AppContext = createContext<{ args: any }>({ args: {} });
 
 const Container = styled.div`
   font-family: monospace;
@@ -181,7 +183,7 @@ const ActionButton = styled.button<{ type?: 'main' | 'secondary' | 'revert' }>`
     box-shadow: 0 2px 0 0 rgba(0, 0, 0, 0.03);
 
   ${props => props.type == 'main' && `
-    background-color: #00aa44;
+    background-color: #598179;
     color: #fff;
   `}
 
@@ -512,7 +514,7 @@ function AllQueries() {
           onClick={() => order('prev_exec_time/new_exec_time')}
           active={orderBy === 'prev_exec_time/new_exec_time' ? 'true' : undefined}
         >
-          {orderBy === 'prev_exec_time/new_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Performance
+          {orderBy === 'prev_exec_time/new_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Improvements
         </QuerySortOption>
       </QuerySort>
 
@@ -659,7 +661,7 @@ function AllQueries() {
                             <ActionButton type="main" onClick={() => applySuggestions(stat.query_id)}>
                               {loadingSuggestions[stat.query_id] ? (
                                 <LoadingIndicator>Applying suggestions...</LoadingIndicator>
-                              ) : '⏬ Apply index suggestions'}
+                              ) : '⏬ Apply index'}{stat.suggested_indexes.trim().split(';').filter(line => line.trim()).length > 1 ? 'es' : ''}
                             </ActionButton>
                           </>
                         )}
@@ -734,20 +736,28 @@ function AllAppliedIndexes() {
 }
 
 function Home() {
-  return <div>Home Content</div>;
+  const { args } = useContext(AppContext);
+
+  return <div>
+    <h1>Instructions</h1>
+    {args && (
+      <>
+        <p>dbpill is running on port {args.proxyPort}. Change your app's PostgreSQL connection to port {args.proxyPort} to start intercepting queries.</p>
+        <p>Then go to Queries tab.</p>
+        <p>You can reset all dbpill-triggered changes from Indexes tab.</p>
+      </>
+    )}
+
+  </div>;
 }
 
 function App(mainProps: MainProps) {
-  const [count, setCount] = useState<number>(0);
+  const { args } = mainProps;
 
   useEffect(() => {
     const socket = io();
     socket.on('connect', () => {
       console.log('connected to socket.io');
-    });
-
-    socket.on('test', (data: SocketTester) => {
-      // setCount(data.counter);
     });
 
     return () => {
@@ -756,24 +766,26 @@ function App(mainProps: MainProps) {
   }, []);
 
   return (
-    <Router>
-      <Container>
-        <NavBar>
-          <TextLogo>dbpill</TextLogo>
-          <StyledNavLink to="/" className={location.pathname === '/' ? 'active' : ''}>Home</StyledNavLink>
-          <StyledNavLink to="/queries">Queries</StyledNavLink>
-          <StyledNavLink to="/indexes">Indexes</StyledNavLink>
-        </NavBar>
-        <MainContent>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/queries" element={<AllQueries />} />
-            <Route path="/query/:query_id" element={<Query />} />
-            <Route path="/indexes" element={<AllAppliedIndexes />} />
-          </Routes>
-        </MainContent>
-      </Container>
-    </Router>
+    <AppContext.Provider value={{ args }}>
+      <Router>
+        <Container>
+          <NavBar>
+            <TextLogo>dbpill</TextLogo>
+            <StyledNavLink to="/" className={location.pathname === '/' ? 'active' : ''}>Home</StyledNavLink>
+            <StyledNavLink to="/queries">Queries</StyledNavLink>
+            <StyledNavLink to="/indexes">Indexes</StyledNavLink>
+          </NavBar>
+          <MainContent>
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/queries" element={<AllQueries />} />
+              <Route path="/query/:query_id" element={<Query />} />
+              <Route path="/indexes" element={<AllAppliedIndexes />} />
+            </Routes>
+          </MainContent>
+        </Container>
+      </Router>
+    </AppContext.Provider>
   );
 }
 

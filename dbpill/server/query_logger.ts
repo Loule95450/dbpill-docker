@@ -1,5 +1,5 @@
 import sqlite3 from 'sqlite3';
-import { open, Database } from 'sqlite';
+import { Database } from 'bun:sqlite';
 
 
 export interface QueryInstance {
@@ -38,10 +38,7 @@ export class QueryLogger {
     }
 
     async initialize(): Promise<void> {
-        this.db = await open({
-            filename: this.dbPath,
-            driver: sqlite3.Database
-        });
+        this.db = new Database(this.dbPath);
 
         await this.exec(`
             CREATE TABLE IF NOT EXISTS queries (
@@ -80,24 +77,25 @@ export class QueryLogger {
         }
     }
 
+
     async exec(sql: string): Promise<void> {
         this.checkDb();
-        return this.db!.exec(sql);
+        return this.db!.query(sql).run();
     }
 
     async run(sql: string, params?: any[]): Promise<any> {
         this.checkDb();
-        return this.db!.run(sql, params);
+        return this.db!.query(sql).run(params);
     }
 
     async get(sql: string, params?: any[]): Promise<any> {
         this.checkDb();
-        return this.db!.get(sql, params);
+        return this.db!.query(sql).get(params);
     }
 
     async all(sql: string, params?: any[]): Promise<any[]> {
         this.checkDb();
-        return this.db!.all(sql, params);
+        return this.db!.query(sql).all(params);
     }
 
     async addQueryStats({
@@ -184,6 +182,7 @@ LEFT JOIN
 LEFT JOIN
   query_instances qi ON qs.query_id = qi.query_id AND qs.max_exec_time = qi.exec_time
 ${queryId ? `WHERE qs.query_id = ?` : ''}
+${orderBy == 'prev_exec_time/new_exec_time' ? 'WHERE qs.prev_exec_time IS NOT NULL' : ''}
 ORDER BY
   qs.${orderBy} ${orderDirection};
         `, [queryId]);

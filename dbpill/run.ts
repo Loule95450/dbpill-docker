@@ -102,7 +102,7 @@ async function createServer() {
       } else {
         html = template.replace(`<!--ssr-outlet-->`, '')
           .replace(`<!--ssr-head-->`, '')
-          .replace(`'<!--ssr-state-->'`, '{}')
+          .replace(`'<!--ssr-state-->'`, JSON.stringify(initial_state))
       }
 
       res.status(200).set({ 'Content-Type': 'text/html' }).end(html)

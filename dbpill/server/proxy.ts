@@ -5,7 +5,9 @@ import { CommandCode, ResponseCode } from 'pg-server';
 
 import { QueryAnalyzer } from './query_analyzer';
 
-export const queryAnalyzer = new QueryAnalyzer("postgresql://cashorbit@localhost:5432/cashorbit");
+import argv from './args';
+
+export const queryAnalyzer = new QueryAnalyzer(argv.db);
 
 enum CommandType {
     Startup = 0,
@@ -80,6 +82,9 @@ class AdvancedPostgresProxySession implements IAdvancedProxySession {
 
     onConnect(socket: Socket) {
         // console.log('👤 Client connected, IP: ', socket.remoteAddress);
+    }
+
+    async initSecondaryDbConnection() {
     }
 
     async onCommand({ command, getRawData }: DbRawCommand, { client, db }: any) {
@@ -176,4 +181,4 @@ const server = createAdvancedProxy(
 );
 
 server.listen(5433, 'localhost');
-console.log('Advanced proxy listening on port 5433');
+console.log('PostgreSQL proxy listening on port 5433');

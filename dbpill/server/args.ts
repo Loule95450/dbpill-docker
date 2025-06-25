@@ -1,7 +1,7 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 
-const argv = yargs(hideBin(process.argv))
+const _yargs = yargs(hideBin(process.argv))
     .option('port', {
         default: 4000,
         type: 'number',
@@ -10,20 +10,44 @@ const argv = yargs(hideBin(process.argv))
     .option('mode', {
         default: 'development',
         describe: 'Server mode',
-        choices: ['development', 'production']
+        choices: ['development', 'production'],
+        hidden: true
     })
     .option('ssr', {
         default: false,
         type: 'boolean',
-        describe: 'Enable server-side rendering.\n  *CSS SSR requires mode=production'
+        describe: 'Enable server-side rendering.\n  *CSS SSR requires mode=production',
+        hidden: true
     })
-    .argv;
+    .option('db', {
+        default: 'postgresql://postgres@localhost:5432/postgres',
+        type: 'string',
+        describe: 'PostgreSQL database connection string. The user must be able to create indexes.'
+    })
+    .option('proxy-port', {
+        default: 5433,
+        type: 'number',
+        describe: 'Port to run the SQL proxy on'
+    })
+    .option('api-key', {
+        default: null,
+        type: 'string',
+        describe: 'Anthropic API key'
+    });
+
+const argv = _yargs.argv;
+
+const options = _yargs.getOptions();
+const hiddenOptions = options.hiddenOptions;
+const defaultOptions = ['help', 'version', '_', '$0'];
+const visibleOptions = Object.keys(options.key).filter(key => !hiddenOptions.includes(key) && !defaultOptions.includes(key));
+
+process.env.NODE_ENV = argv.mode;
 
 console.log('Running with args:');
-for (const [key, value] of Object.entries(argv)) {
-    if (key !== '_' && key !== '$0') {
-        console.log(`  --${key} ${value}`);
-    }
+for (const key of visibleOptions) {
+    const value = argv[key];
+    console.log(`  --${key} ${value}`);
 }
 
 export default argv as Record<string, any>;

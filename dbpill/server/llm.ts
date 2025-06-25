@@ -1,7 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import axios from 'axios';
+
+import argv from './args';
+
 function getCredentials(service: string, key: string): string {
-    return "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";
+    return argv.anthropic_api_key;
 }
 
 export interface Completion {

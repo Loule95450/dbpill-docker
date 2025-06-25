@@ -6,5 +6,5 @@ import App from './App.tsx'
 const initial_state = window.__INITIAL_STATE__
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <App greeting={initial_state.greeting} />
+  <App args={initial_state.args} />
 )
