@@ -1,3 +1,8 @@
+# murat notes
+
+npx tsx run.ts --mode development --port 3000 --db=postgresql://cashorbit@localhost:5432/cashorbit
+
+
 # Distribution & Development Guide
 
 This document explains two workflows:
