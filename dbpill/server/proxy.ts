@@ -6,14 +6,13 @@ import fs from 'fs';
 import path from 'path';
 import * as net from 'net';
 import * as tls from 'tls';
-import { fileURLToPath } from 'url';
 
 import { QueryAnalyzer } from './query_analyzer';
 
 import argv from './args';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Import SEA helpers lazily to avoid pulling them in when not bundled.
+import { isSea, getAsset } from 'node:sea';
 
 export const queryAnalyzer = new QueryAnalyzer(argv.db);
 
@@ -186,20 +185,37 @@ class AdvancedPostgresProxySession implements IAdvancedProxySession {
 }
 
 // === TLS MITM settings ===
-const keyPath = path.resolve(__dirname, '../credentials/proxy.key');
-const certPath = path.resolve(__dirname, '../credentials/proxy.crt');
+const diskKeyPath = path.resolve(__dirname, '../credentials/proxy.key');
+const diskCertPath = path.resolve(__dirname, '../credentials/proxy.crt');
 
-if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
-    console.error('[proxy] TLS key or certificate not found. Expected at:');
-    console.error(`  key : ${keyPath}`);
-    console.error(`  cert: ${certPath}`);
-    console.error('Please create or place a valid certificate pair before starting the proxy.');
+function loadCredential(filePath: string, assetKey: string): Buffer | null {
+    if (fs.existsSync(filePath)) {
+        return fs.readFileSync(filePath);
+    }
+    if (isSea()) {
+        try {
+            const data = getAsset(assetKey);
+            return Buffer.from(data);
+        } catch {}
+    }
+    return null;
+}
+
+const keyBuf = loadCredential(diskKeyPath, 'credentials/proxy.key');
+const certBuf = loadCredential(diskCertPath, 'credentials/proxy.crt');
+
+if (!keyBuf || !certBuf) {
+    console.error('[proxy] TLS key or certificate not found on disk or in SEA assets.');
+    console.error('Expected either:');
+    console.error(`  Disk key : ${diskKeyPath}`);
+    console.error(`  Disk cert: ${diskCertPath}`);
+    console.error('Or corresponding entries in sea-config.json under "credentials/".');
     process.exit(1);
 }
 
 const TLS_SERVER_OPTS: tls.TlsOptions = {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath),
+    key: keyBuf,
+    cert: certBuf,
     requestCert: false,
     rejectUnauthorized: false,
     secureProtocol: 'TLS_method', // Support all TLS versions
@@ -209,8 +225,7 @@ const TLS_SERVER_OPTS: tls.TlsOptions = {
 
 // Log certificate info
 console.log('[proxy] Certificate loaded successfully');
-console.log('[proxy] Key file size:', fs.statSync(keyPath).size, 'bytes');
-console.log('[proxy] Cert file size:', fs.statSync(certPath).size, 'bytes');
+console.log('[proxy] Key bytes:', keyBuf.length, 'cert bytes:', certBuf.length);
 
 // Parse backend details from the provided connection string
 const dbUrl = new URL(argv.db as string);

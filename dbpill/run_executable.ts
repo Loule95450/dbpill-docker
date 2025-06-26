@@ -1,6 +1,24 @@
+// ---------------------------------------------------------------------------
+// SEA bootstrap: restore a real, file-system-backed `require` BEFORE anything
+// else is evaluated. We do it with plain-CommonJS so esbuild keeps the code
+// right at the top of the output file.
+// ---------------------------------------------------------------------------
+const { createRequire } = require('node:module');
+// Build a real file-system aware require without shadowing esbuild's internal
+// helper (which is also called `requireX`).
+const realRequire = createRequire(__filename);
+
+// Expose it globally so libraries that call plain `require()` (e.g. inside the
+// esbuild bundle) still succeed, but don't overwrite the per-module helpers
+// that esbuild generates (require2, require3...).
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore
+if (typeof global.require !== 'function') {
+  global.require = realRequire;
+}
+
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
 import express from "express";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
@@ -42,8 +60,6 @@ const port = args.port;
 const mode = 'production';
 const ssr_enabled = args.ssr;
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
 async function createServer() {
   const app = express()
 
@@ -62,9 +78,22 @@ async function createServer() {
     res.send(output);
   });
 
+  // Serve the browser JS bundle. Historically we renamed the file to
+  // `index.js.txt` so that Node SEA treated it as an inert asset. If the
+  // project keeps the original `index.js` instead, this route will now work
+  // in both cases.
   app.get('/client/index.js', (req, res) => {
     res.setHeader('Content-Type', 'text/javascript');
-    const output = readAssetTextSync('dist/index.js.txt');
+
+    // Prefer the vanilla file name first (Vite's default). Fallback to the
+    // legacy `.js.txt` name so existing builds keep working.
+    let output: string;
+    try {
+      output = readAssetTextSync('dist/index.js');
+    } catch (_) {
+      output = readAssetTextSync('dist/index.js.txt');
+    }
+
     res.send(output);
   });
 
@@ -126,7 +155,11 @@ async function createServer() {
   return app
 }
 
-const app = await createServer();
+// Initialize the server (wrapped in a promise chain to avoid top-level await)
+createServer().catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);

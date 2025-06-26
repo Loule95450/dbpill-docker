@@ -46,9 +46,11 @@
     "@typescript-eslint/eslint-plugin": "^7.2.0",
     "@typescript-eslint/parser": "^7.2.0",
     "@vitejs/plugin-react": "^4.2.1",
+    "esbuild": "^0.25.5",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.6",
+    "postject": "^1.0.0-alpha.6",
     "tsx": "^4.20.3",
     "typescript": "^5.2.2",
     "vite": "^5.2.8"

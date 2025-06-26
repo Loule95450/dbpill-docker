@@ -1,0 +1,13 @@
+{
+  "main": "./server.bundle.cjs",
+  "disableExperimentalSEAWarning": true,
+  "output": "sea-prep.blob",
+  "assets": {
+    "dist/index.html": "./dist/index.html",
+    "dist/index.js": "./dist/index.js",
+    "dist/assets/index.css": "./dist/assets/index.css",
+    "credentials/proxy.key": "./credentials/proxy.key",
+    "credentials/proxy.crt": "./credentials/proxy.crt",
+    "dbpill.sqlite.db": "./dbpill.sqlite.db"
+  }
+} 

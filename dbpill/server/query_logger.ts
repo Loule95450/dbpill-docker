@@ -1,5 +1,19 @@
-import Database, { Database as BetterSqliteDatabase, Statement } from 'better-sqlite3';
+import { createRequire } from 'node:module';
 
+// Load better-sqlite3 at *runtime* rather than with a top-level import.  When
+// the code is bundled into a Node SEA, the special `require()` that runs the
+// main script can only load built-in modules unless we patch it first. By
+// deferring the load we make sure our patched, file-system-aware `require`
+// implementation is already in place.
+
+// When transpiled to CommonJS, `__filename` is available and safe to use.
+const localRequire = createRequire(__filename);
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const BetterSqlite: typeof import('better-sqlite3') = localRequire('better-sqlite3');
+
+type BetterSqliteDatabase = import('better-sqlite3').Database;
+type Statement = import('better-sqlite3').Statement;
 
 export interface QueryInstance {
     instance_id: number;
@@ -37,7 +51,7 @@ export class QueryLogger {
     }
 
     async initialize(): Promise<void> {
-        this.db = new Database(this.dbPath, { verbose: undefined });
+        this.db = new BetterSqlite(this.dbPath, { verbose: undefined });
 
         await this.exec(`
             CREATE TABLE IF NOT EXISTS queries (
