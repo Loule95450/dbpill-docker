@@ -6,10 +6,14 @@ import fs from 'fs';
 import path from 'path';
 import * as net from 'net';
 import * as tls from 'tls';
+import { fileURLToPath } from 'url';
 
 import { QueryAnalyzer } from './query_analyzer';
 
 import argv from './args';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const queryAnalyzer = new QueryAnalyzer(argv.db);
 
@@ -194,8 +198,11 @@ if (!fs.existsSync(keyPath) || !fs.existsSync(certPath)) {
 const TLS_SERVER_OPTS: tls.TlsOptions = {
     key: fs.readFileSync(keyPath),
     cert: fs.readFileSync(certPath),
-    // allow older pg clients that do not set SNI
     requestCert: false,
+    rejectUnauthorized: false,
+    secureProtocol: 'TLS_method', // Support all TLS versions
+    honorCipherOrder: true,
+    ciphers: 'HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA',
 };
 
 // Log certificate info
@@ -305,9 +312,33 @@ const listener = net.createServer((rawClient) => {
             const tlsClient = new tls.TLSSocket(rawClient, { ...TLS_SERVER_OPTS, isServer: true });
             console.log('[proxy] TLS socket created, waiting for handshake...');
 
+            // Add comprehensive TLS event logging
+            tlsClient.on('keylog', (line) => {
+                console.log('[proxy] TLS keylog:', line.toString());
+            });
+            
+            tlsClient.on('session', (session) => {
+                console.log('[proxy] TLS session established, length:', session.length);
+            });
+            
+            tlsClient.on('secureConnect', () => {
+                console.log('[proxy] secureConnect fired!');
+                console.log('[proxy] TLS version:', tlsClient.getProtocol());
+                console.log('[proxy] TLS cipher:', tlsClient.getCipher());
+                console.log('[proxy] TLS authorized:', tlsClient.authorized);
+                console.log('[proxy] TLS server name:', (tlsClient as any).servername || 'none');
+            });
+            
+            tlsClient.on('OCSPResponse', (response) => {
+                console.log('[proxy] OCSP response received');
+            });
+
             tlsClient.on('error', (err) => {
                 console.error('[proxy] tlsClient error during/after handshake:', err);
+                console.error('[proxy] Error code:', err.code);
+                console.error('[proxy] Error errno:', (err as any).errno);
             });
+            
             tlsClient.on('close', (hadError) => {
                 console.log(`[proxy] tlsClient closed during/after handshake. Had error: ${hadError}`);
             });
@@ -324,29 +355,20 @@ const listener = net.createServer((rawClient) => {
                 console.log('[proxy] tlsClient timeout event fired');
             });
 
-            tlsClient.once('secureConnect', () => {
-                console.log('[proxy] TLS handshake complete (secureConnect), waiting for client application data');
-                tlsClient.once('data', (firstPlain) => {
-                    console.log(`[proxy] Received first ${firstPlain.length} application bytes after TLS handshake: ${firstPlain.slice(0, 32).toString('hex')}`);
-                    startPgProxy(tlsClient, firstPlain);
-                });
+            // Once we receive the first decrypted Postgres packet, start full proxying
+            tlsClient.once('data', (firstPg) => {
+                console.log('[proxy] Received first Postgres bytes after TLS handshake:', firstPg.slice(0, 32).toString('hex'));
+                startPgProxy(tlsClient, firstPg);
             });
-            
-            // Add a timeout for TLS handshake
+
+            // Safety timeout – if we never get Postgres data, terminate
             const tlsTimeout = setTimeout(() => {
-                console.log('[proxy] TLS handshake timeout after 10 seconds');
-                console.log('[proxy] TLS authorized:', tlsClient.authorized);
-                console.log('[proxy] TLS pending:', tlsClient.pending);
-                console.log('[proxy] TLS readyState:', tlsClient.readyState);
+                console.warn('[proxy] TLS handshake appeared to stall (no Postgres data within 10s)');
                 tlsClient.destroy();
             }, 10000);
-            
-            tlsClient.on('secureConnect', () => {
-                clearTimeout(tlsTimeout);
-            });
-            tlsClient.on('close', () => {
-                clearTimeout(tlsTimeout);
-            });
+
+            tlsClient.on('data', () => clearTimeout(tlsTimeout));
+            tlsClient.on('close', () => clearTimeout(tlsTimeout));
         } else {
             console.log('[proxy] No SSLRequest detected, proceeding with plain text');
             // No TLS – proceed as plain text (pass along the bytes we already read)

@@ -1,5 +1,4 @@
-import sqlite3 from 'sqlite3';
-import { Database } from 'bun:sqlite';
+import Database, { Database as BetterSqliteDatabase, Statement } from 'better-sqlite3';
 
 
 export interface QueryInstance {
@@ -31,14 +30,14 @@ export interface QueryGroup {
 }
 
 export class QueryLogger {
-    private db: Database<sqlite3.Database> | null = null;
+    private db: BetterSqliteDatabase | null = null;
 
     constructor(private dbPath: string) {
         this.initialize();
     }
 
     async initialize(): Promise<void> {
-        this.db = new Database(this.dbPath);
+        this.db = new Database(this.dbPath, { verbose: undefined });
 
         await this.exec(`
             CREATE TABLE IF NOT EXISTS queries (
@@ -80,22 +79,28 @@ export class QueryLogger {
 
     async exec(sql: string): Promise<void> {
         this.checkDb();
-        return this.db!.query(sql).run();
+        this.db!.exec(sql);
     }
 
     async run(sql: string, params?: any[]): Promise<any> {
         this.checkDb();
-        return this.db!.query(sql).run(params);
+        const stmt: Statement = this.db!.prepare(sql);
+        const result = params ? stmt.run(params) : stmt.run();
+        return result; // better-sqlite3 returns RunResult
     }
 
     async get(sql: string, params?: any[]): Promise<any> {
         this.checkDb();
-        return this.db!.query(sql).get(params);
+        const stmt: Statement = this.db!.prepare(sql);
+        const row = params ? stmt.get(params) : stmt.get();
+        return row;
     }
 
     async all(sql: string, params?: any[]): Promise<any[]> {
         this.checkDb();
-        return this.db!.query(sql).all(params);
+        const stmt: Statement = this.db!.prepare(sql);
+        const rows = params ? stmt.all(params) : stmt.all();
+        return rows;
     }
 
     async addQueryStats({
@@ -285,7 +290,7 @@ ORDER BY
 
     async close(): Promise<void> {
         if (this.db) {
-            await this.db.close();
+            this.db.close();
             this.db = null;
         }
     }
