@@ -159,19 +159,43 @@ export class QueryAnalyzer {
       const explainQuery = `EXPLAIN (ANALYZE, FORMAT JSON) ${query}`;
       const result = await client.query(explainQuery, params);
 
-      if (result.rows.length > 0) {
-        const queryPlan: QueryPlan = result.rows[0]["QUERY PLAN"][0];
-        const planTime = queryPlan['Planning Time'];
-        const execTime = queryPlan['Execution Time'];
+      const rows = (result as any)?.rows;
+      if (Array.isArray(rows) && rows.length > 0) {
+        const firstRow = rows[0];
+        const planArray = firstRow?.["QUERY PLAN"];
 
-        const sessionId = this.sessionId;
-        return { sessionId, query, params, queryPlan, planTime, execTime };
+        if (Array.isArray(planArray) && planArray.length > 0) {
+          const queryPlan: QueryPlan = planArray[0];
+          const planTime = queryPlan['Planning Time'];
+          const execTime = queryPlan['Execution Time'];
+
+          const sessionId = this.sessionId;
+          return { sessionId, query, params, queryPlan, planTime, execTime };
+        }
       }
+
+      // Fallback – return a minimal object so callers don't crash
+      return {
+        sessionId: this.sessionId,
+        query,
+        params,
+        queryPlan: null,
+        planTime: 0,
+        execTime: 0,
+      };
     } catch (error) {
       console.error(query);
       console.error(params);
       console.error('Error analyzing query:', error);
-      throw error;
+      // Still return a minimal object so downstream logic can continue
+      return {
+        sessionId: this.sessionId,
+        query,
+        params,
+        queryPlan: null,
+        planTime: 0,
+        execTime: 0,
+      };
     } finally {
       if (client) {
         client.release();

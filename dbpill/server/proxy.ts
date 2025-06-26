@@ -176,7 +176,9 @@ class AdvancedPostgresProxySession implements IAdvancedProxySession {
         }
         try {
             const analysis = await queryAnalyzer.analyze({query: query.query, params: query.params});
-            queryAnalyzer.saveAnalysis(analysis);
+            if (analysis) {
+                queryAnalyzer.saveAnalysis(analysis);
+            }
         } catch (error) {
             console.error('Error analyzing query:', error);
         }

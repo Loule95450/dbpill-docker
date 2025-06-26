@@ -186,11 +186,13 @@ LEFT JOIN
   max_exec_query meq ON qs.query_id = meq.query_id
 LEFT JOIN
   query_instances qi ON qs.query_id = qi.query_id AND qs.max_exec_time = qi.exec_time
-${queryId ? `WHERE qs.query_id = ?` : ''}
-${orderBy == 'prev_exec_time/new_exec_time' ? 'WHERE qs.prev_exec_time IS NOT NULL' : ''}
+${queryId || orderBy == 'prev_exec_time/new_exec_time' ? 'WHERE' : ''}
+${queryId ? ' qs.query_id = ?' : ''}
+${queryId && orderBy == 'prev_exec_time/new_exec_time' ? ' AND' : ''}
+${orderBy == 'prev_exec_time/new_exec_time' ? ' qs.prev_exec_time IS NOT NULL' : ''}
 ORDER BY
   qs.${orderBy} ${orderDirection};
-        `, [queryId]);
+        `, queryId ? [queryId] : []);
 
         const query_ids = results.map(result => result.query_id);
         const query = `
