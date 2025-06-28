@@ -14,21 +14,20 @@ import ReactMarkdown from 'react-markdown';
 const AppContext = createContext<{ args: any }>({ args: {} });
 
 const Container = styled.div`
-  font-family: monospace;
+  font-family: "Inconsolata", monospace;
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: auto;
-  background-color: #eee;
-  color: #4a4a4a;
-
+  background-color: rgba(40, 40, 40, 1);
+  color: #fff;
 
   & code {
-    background-color: rgba(0, 0, 0, 0.1);
+    background-color: rgba(255, 255, 255, 0.1);
     padding: 2px 4px;
     border-radius: 4px;
   }
-    & pre > code {
+  & pre > code {
     display: block;
     padding: 5px 7px;
     border-radius: 0;
@@ -36,8 +35,14 @@ const Container = styled.div`
 `;
 
 const TextLogo = styled.div`
-  font-size: 1.5em;
-  font-weight: bold;
+  font-size: 30px;
+  font-weight: 700;
+  text-transform: lowercase;
+  letter-spacing: 2px;
+  background: linear-gradient(to right, rgba(0, 50, 100, 0.8) 25%, rgba(100, 0, 0, 0.8) 75%);
+  display: inline-block;
+  padding: 0 20px;
+  border-radius: 30px;
   color: #fff;
 `;
 
@@ -45,7 +50,8 @@ const NavBar = styled.div`
   display: flex;
   gap: 10px;
   padding: 10px;
-  background-color: #000;
+  background-color: rgba(0, 0, 0, 1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 `;
 
 const StyledNavLink = styled(RouterNavLink)`
@@ -70,27 +76,31 @@ const StyledNavLink = styled(RouterNavLink)`
 const MainContent = styled.div`
   flex-grow: 1;
   padding: 20px;
+  background-color: rgba(35, 35, 35, 1);
 `;
 
 const Table = styled.table`
   width: 100%;
   border-collapse: collapse;
   margin-top: 20px;
-  background-color: #fff;
+  background-color: rgba(45, 45, 45, 1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 `;
 
 const TableRow = styled.tr`
-  background-color: rgba(0, 0, 0, 0.01);
+  background-color: rgba(45, 45, 45, 1);
   &:nth-child(even) {
-    background-color: rgba(0, 0, 0, 0.03);
+    background-color: rgba(50, 50, 50, 1);
   }
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 `;
 
 const TableHeader = styled.th`
   padding: 12px;
   text-align: left;
-  border: 1px solid #d2b48c;
-  background-color: #deb887;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background-color: rgba(60, 60, 60, 1);
+  color: #fff;
 `;
 
 const TableData = styled.td`
@@ -102,6 +112,8 @@ const TableData = styled.td`
   text-overflow: ellipsis;
   text-align: center;
   text-align: left;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
 `;
 
 const QueryStats = styled.div`
@@ -128,19 +140,21 @@ const QueryText = styled.pre<{ $expanded?: boolean }>`
   padding: 10px;
   margin: -10px;
   display: block;
-  border-right: 1px solid rgba(0, 0, 0, 0.03);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: rgba(30, 30, 30, 1);
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
   
   ${props => !props.$expanded && `
     cursor: pointer;
     &:hover {
-      outline: 1px solid #000;
+      outline: 1px solid rgba(255, 255, 255, 0.3);
     }
   `}
 
   ${props => props.$expanded && `
     max-height: none;
   `}
-
 `;
 
 const QuerySort = styled.span`
@@ -154,14 +168,17 @@ const QuerySortOption = styled.span<{ active?: string }>`
   padding: 0 5px;
   line-height: 20px;
   user-select: none;
-  border-bottom: 1px solid #000;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.8);
 
   &:hover {
-    box-shadow: 0 2px 0 0 #00000077;
+    box-shadow: 0 2px 0 0 rgba(255, 255, 255, 0.5);
+    color: #fff;
   }
 
   ${props => props.active == 'true' && `
-    box-shadow: 0 2px 0 0 #000;
+    box-shadow: 0 2px 0 0 #fff;
+    color: #fff;
   `}
 `;
 
@@ -172,40 +189,58 @@ const RowIndex = styled.span`
 
 const ActionButton = styled.button<{ type?: 'main' | 'secondary' | 'revert' }>`
   padding: 5px 10px;
-  font-family: monospace;
-  background-color: #444;
+  font-family: "Inconsolata", monospace;
+  background-color: rgba(80, 80, 80, 1);
   color: #fff;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 5px;
   cursor: pointer;
   line-height: 20px;
   margin-right: 10px;
-    box-shadow: 0 2px 0 0 rgba(0, 0, 0, 0.03);
+  box-shadow: 0 2px 0 0 rgba(0, 0, 0, 0.3);
 
   ${props => props.type == 'main' && `
-    background-color: #598179;
+    background-color: rgb(69, 132, 15);
     color: #fff;
+    border-color: rgba(255, 255, 255, 0.3);
   `}
 
   ${props => props.type == 'revert' && `
-    background-color: #fff;
-    color: #a00;
+    background-color: rgba(200, 60, 60, 1);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.3);
   `}
 
   ${props => props.type == 'secondary' && `
-    background-color: #fff;
-    color: #444;
+    background-color: rgba(60, 60, 60, 1);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.2);
   `}
 
   &:hover {
-    box-shadow: 0 2px 0 0 rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 0 0 rgba(255, 255, 255, 0.3);
+    filter: brightness(1.1);
   }
 `;
 
 const Block = styled.div`
   padding: 10px;
-  background-color: #fff;
+  background-color: rgba(45, 45, 45, 1);
   border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  
+  & h1, & h2, & h3, & h4 {
+    color: #fff;
+  }
+  
+  & pre {
+    background-color: rgba(30, 30, 30, 1);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
 `;
 
 const IndexSuggestions = styled.div`
@@ -213,8 +248,9 @@ const IndexSuggestions = styled.div`
     margin-top: 0;
     padding-top: 0;
     margin-bottom: 10px;
-    opacity: 0.5;
+    opacity: 0.7;
     font-weight: normal;
+    color: rgba(255, 255, 255, 0.7);
   }
 `;
 
@@ -229,12 +265,12 @@ const LoadingIndicator = styled.div`
 `;
 
 const SuggestionsApplied = styled.div`
-  color: rgba(0, 30, 0, 0.5);
+  color: rgba(100, 255, 100, 0.8);
   margin-bottom: 10px;
 `;
 
 const GlobalStats = styled.div`
-  color: rgba(0, 30, 0, 0.5);
+  color: rgba(255, 255, 255, 0.7);
   margin-bottom: 10px;
   text-align: right;
 `;
@@ -244,6 +280,7 @@ const StatTable = styled.table`
   border-collapse: collapse;
   margin-top: 20px;
   display: inline-block;
+  background-color: rgba(35, 35, 35, 1);
 `;
 
 const StatRow = styled.tr`
@@ -251,10 +288,11 @@ const StatRow = styled.tr`
 
 const StatHeader = styled.th`
   text-align: left;
+  color: rgba(255, 255, 255, 0.8);
 `;
 
 const StatCell = styled.td`
-
+  color: rgba(255, 255, 255, 0.9);
 `;
 
 const StatValue = styled.div<{ mode?: 'up' | 'down' }>`
@@ -490,25 +528,25 @@ function AllQueries() {
           onClick={() => order('max_exec_time')}
           active={orderBy === 'max_exec_time' ? 'true' : undefined}
         >
-          {orderBy === 'max_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Max Execution Time
+          {orderBy === 'max_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Max time
         </QuerySortOption>
         <QuerySortOption
           onClick={() => order('min_exec_time')}
           active={orderBy === 'min_exec_time' ? 'true' : undefined}
         >
-          {orderBy === 'min_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Min Execution Time
+          {orderBy === 'min_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Min time
         </QuerySortOption>
         <QuerySortOption
           onClick={() => order('avg_exec_time')}
           active={orderBy === 'avg_exec_time' ? 'true' : undefined}
         >
-          {orderBy === 'avg_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Avg Execution Time
+          {orderBy === 'avg_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Avg time
         </QuerySortOption>
         <QuerySortOption
           onClick={() => order('num_instances')}
           active={orderBy === 'num_instances' ? 'true' : undefined}
         >
-          {orderBy === 'num_instances' && (orderDirection === 'asc' ? '▲' : '▼')} Number of Executions
+          {orderBy === 'num_instances' && (orderDirection === 'asc' ? '▲' : '▼')} Run count
         </QuerySortOption>
         <QuerySortOption
           onClick={() => order('prev_exec_time/new_exec_time')}
