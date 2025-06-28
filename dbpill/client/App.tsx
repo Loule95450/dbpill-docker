@@ -50,6 +50,7 @@ const NavBar = styled.div`
   display: flex;
   gap: 10px;
   padding: 10px;
+  line-height: 40px;
   background-color: rgba(0, 0, 0, 1);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 `;
@@ -58,8 +59,7 @@ const StyledNavLink = styled(RouterNavLink)`
   cursor: pointer;
   text-decoration: none;
   padding: 0 5px;
-  line-height: 20px;
-  height: 20px;
+  height: 30px;
 
   color: #fff;
   border-bottom: 1px solid transparent;
@@ -531,12 +531,6 @@ function AllQueries() {
           {orderBy === 'max_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Max time
         </QuerySortOption>
         <QuerySortOption
-          onClick={() => order('min_exec_time')}
-          active={orderBy === 'min_exec_time' ? 'true' : undefined}
-        >
-          {orderBy === 'min_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Min time
-        </QuerySortOption>
-        <QuerySortOption
           onClick={() => order('avg_exec_time')}
           active={orderBy === 'avg_exec_time' ? 'true' : undefined}
         >
@@ -553,6 +547,12 @@ function AllQueries() {
           active={orderBy === 'prev_exec_time/new_exec_time' ? 'true' : undefined}
         >
           {orderBy === 'prev_exec_time/new_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Improvements
+        </QuerySortOption>
+        <QuerySortOption
+          onClick={() => order('total_time')}
+          active={orderBy === 'total_time' ? 'true' : undefined}
+        >
+          {orderBy === 'total_time' && (orderDirection === 'asc' ? '▲' : '▼')} Total time
         </QuerySortOption>
       </QuerySort>
 

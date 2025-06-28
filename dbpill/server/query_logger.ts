@@ -150,6 +150,9 @@ export class QueryLogger {
     }
 
     async getQueryGroups({orderBy, orderDirection, queryId}: { orderBy: string, orderDirection: string, queryId?: number}): Promise<any> {
+        // Handle total_time sorting by calculating it in SQL
+        const actualOrderBy = orderBy === 'total_time' ? '(avg_exec_time * num_instances)' : `qs.${orderBy}`;
+        
         let results: QueryGroup[] = await this.all(`
 WITH query_stats AS (
   SELECT
@@ -205,7 +208,7 @@ ${queryId ? ' qs.query_id = ?' : ''}
 ${queryId && orderBy == 'prev_exec_time/new_exec_time' ? ' AND' : ''}
 ${orderBy == 'prev_exec_time/new_exec_time' ? ' qs.prev_exec_time IS NOT NULL' : ''}
 ORDER BY
-  qs.${orderBy} ${orderDirection};
+  ${actualOrderBy} ${orderDirection};
         `, queryId ? [queryId] : []);
 
         const query_ids = results.map(result => result.query_id);
