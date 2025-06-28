@@ -27,6 +27,57 @@ export class QueryAnalyzer {
     this.logger = logger;
   }
 
+  private shouldSkipAnalysis(query: string): boolean {
+    const trimmedQuery = query.trim().toUpperCase();
+    
+    // List of query types that can't be analyzed with EXPLAIN
+    const skipPatterns = [
+      'SHOW',
+      'SET',
+      'RESET',
+      'BEGIN',
+      'COMMIT',
+      'ROLLBACK',
+      'START TRANSACTION',
+      'SAVEPOINT',
+      'RELEASE SAVEPOINT',
+      'ROLLBACK TO SAVEPOINT',
+      'PREPARE',
+      'EXECUTE',
+      'DEALLOCATE',
+      'LISTEN',
+      'NOTIFY',
+      'UNLISTEN',
+      'LOAD',
+      'DISCARD',
+      'CHECKPOINT',
+      'VACUUM',
+      'ANALYZE',
+      'REINDEX',
+      'CLUSTER',
+      'LOCK',
+      'GRANT',
+      'REVOKE',
+      'CREATE ROLE',
+      'DROP ROLE',
+      'ALTER ROLE',
+      'CREATE USER',
+      'DROP USER',
+      'ALTER USER',
+      'CREATE DATABASE',
+      'DROP DATABASE',
+      'ALTER DATABASE',
+      'CREATE TABLESPACE',
+      'DROP TABLESPACE',
+      'ALTER TABLESPACE',
+      'COMMENT ON',
+      'SECURITY LABEL',
+      'COPY',
+      '\\',  // psql meta-commands
+    ];
+
+    return skipPatterns.some(pattern => trimmedQuery.startsWith(pattern));
+  }
 
   async getTableStructure(tableName: string, schemaName?: string): Promise<string> {
     let output = '';
@@ -151,6 +202,17 @@ export class QueryAnalyzer {
 
 
   async analyze({ query, params = [] }: AnalyzeParams): Promise<any> {
+    if (this.shouldSkipAnalysis(query)) {
+      return {
+        sessionId: this.sessionId,
+        query,
+        params,
+        queryPlan: null,
+        planTime: 0,
+        execTime: 0,
+      };
+    }
+
     let client: PoolClient | null = null;
 
     try {
@@ -170,6 +232,7 @@ export class QueryAnalyzer {
           const execTime = queryPlan['Execution Time'];
 
           const sessionId = this.sessionId;
+          console.log(query);
           return { sessionId, query, params, queryPlan, planTime, execTime };
         }
       }

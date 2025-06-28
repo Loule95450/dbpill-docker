@@ -129,7 +129,8 @@ class AdvancedPostgresProxySession implements IAdvancedProxySession {
     }
 
     async onResult(result: any, { client, db }: any) {
-        client.socket.write(result.getRawData() as Uint8Array);
+        // The raw bytes have already been sent to the client upstream. We only care about
+        // inspecting the response metadata here.
 
         if (result.response.type === ResponseCode.ReadyForQuery) {
             if (this.queryStack.length > 0) {
@@ -263,11 +264,19 @@ function startPgProxy(clientSock: net.Socket, pending?: Buffer) {
     // Handle responses coming from the database
     const parser = new DbResponseParser();
     dbSock.on('data', (buf) => {
-        // console.log('[proxy] Received data from backend DB.'); // Potentially noisy
+        // First, forward the raw bytes unmodified so the client receives exactly what the DB sent.
+        clientSock.write(buf as Uint8Array);
+
+        // Then, in the background, parse the buffer so our session can still react to
+        // ReadyForQuery / Error responses, etc. Any parsing bug will no longer corrupt the
+        // stream because the client has already received the pristine data.
         if (session.onResult) {
-            parser.parse(buf, (res) => session.onResult!(res, parties));
-        } else {
-            clientSock.write(buf as Uint8Array);
+            try {
+                parser.parse(buf, (res) => session.onResult!(res, parties));
+            } catch (err) {
+                // Parsing errors should never impact the proxy data-flow.
+                console.error('[proxy] Error while parsing DB response:', err);
+            }
         }
     });
 

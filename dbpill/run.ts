@@ -126,12 +126,14 @@ async function createServer() {
   return app
 }
 
-const app = await createServer();
+(async () => {
+  const app = await createServer();
 
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-});
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+  });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  });
+})();

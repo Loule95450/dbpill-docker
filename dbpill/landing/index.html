@@ -43,7 +43,9 @@
             font-weight: 700;
             text-transform: lowercase;
             letter-spacing: 2px;
-            background: linear-gradient(to right, rgba(0, 50, 100, 0.8) 25%, rgba(100, 0, 0, 0.8) 75%);
+            border: 1px solid color(display-p3 0.964 0.7613 0.3253);
+            color: color(display-p3 0.964 0.7613 0.3253);
+            background: linear-gradient(to right, rgba(86, 65, 9, 0.8) 25%, rgba(59, 40, 7, 0.8) 75%);
             display: inline-block;
             padding: 0 20px;
             border-radius: 30px;
@@ -59,7 +61,7 @@
 
         .hero {
             border-top: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 20px 0;
+            padding: 10px 0;
             background-color: rgba(35, 35, 35, 1);
             color: rgba(255, 255, 255, 0.8);
         }
@@ -147,26 +149,26 @@
         }
 
         .accent-1 {
-            color: rgba(255, 255, 255, 1);
-            border-bottom: 1px solid rgba(85, 205, 85, 1);
+            color: rgb(250, 218, 149);
+            border-bottom: 1px solid rgba(250, 218, 149, 0.618);
             font-weight: 600;
         }
 
         .accent-2 {
-            color: rgba(255, 255, 255, 1);
-            border-bottom: 1px solid rgba(221, 125, 60, 1);
+            color: rgb(250, 218, 149);
+            border-bottom: 1px solid rgba(250, 218, 149, 0.618);
             font-weight: 600;
         }
 
         .accent-3 {
-            color: rgba(255, 255, 255, 1);
-            border-bottom: 1px solid rgba(75, 78, 255, 1);
+            color: rgb(250, 218, 149);
+            border-bottom: 1px solid rgba(250, 218, 149, 0.618);
             font-weight: 600;
         }
 
         .accent-4 {
-            color: rgba(255, 255, 255, 1);
-            border-bottom: 1px solid rgb(146, 49, 155);
+            color: rgb(250, 218, 149);
+            border-bottom: 1px solid rgba(250, 218, 149, 0.618);
             font-weight: 600;
         }
 
@@ -326,7 +328,7 @@
             <div class="container">
                 <div style="text-align: center;">
                     <div class="logo">dbpill</div>
-                    <span class="subheading">Automate your PostgreSQL optimization</span>
+                    <span class="subheading">Automated SQL indexer</span>
                 </div>
             </div>
         </section>
@@ -335,8 +337,8 @@
             <div class="container">
 
                 <div style="text-align: center; margin-bottom: 40px; line-height: 1.6em;">
-                    <p style="font-size: 20px; color: #ffffff77">Stop spending money &amp; time on replicas/caching/microservices<br />when the fix was a one-liner index update.</p>
-                    <p style="font-size: 24px; color: #ffffff; text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);"><u>dbpill</u> intercepts, finds & fixes sneaky slow queries</p>
+                    <p style="font-size: 20px; color: #ffffff77">Stop spending money &amp; time on replicas/caching/microservices<br />when the fix was a one-liner.</p>
+                    <p style="font-size: 24px; color: #ffffff; text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);"><span style="color: color(display-p3 0.964 0.7613 0.3253);">dbpill</span> intercepts, finds & fixes sneaky slow queries</p>
                 </div>
 
                 <img class="diagram" src="./dbpill_diagram.svg" alt="dbpill workflow diagram" />
@@ -350,7 +352,7 @@
                 <div class="cta-container">
                     <a href="#" class="cta-button">
                         <span style="font-size: 18px; color: rgba(255, 255, 255, 0.9);">Buy standalone executable</span><br />
-                        $100<br />
+                        <span style="text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);">$100</span><br />
                         <span class="one-time-fee">
                             <ul style="list-style-type: none; padding: 0; margin: 0;">
                                 <li>One-time fee</li>
@@ -422,10 +424,10 @@
                     <p><span class='accent-4'>One-click AI analysis</span> Use your own LLM API keys with the latest models.</p>
                 </div>
                 <div class="feature">
-                    <p><span class="accent-2">One-click apply, one-click revert</span> Instantly apply suggested index improvements to boost your database performance.</p>
+                    <p><span class="accent-3">No guesswork, exact performance metrics</span> See the performance of your queries before & after indexing.</p>
                 </div>
                 <div class="feature">
-                    <p><span class="accent-3">No guesswork, see exactly how performance changed</span> Get a detailed performance summary of your queries pre and post-indexing.</p>
+                    <p><span class="accent-2">One-click apply, one-click revert</span> Instantly test suggested index improvements.</p>
                 </div>
             </div>
         </section>
