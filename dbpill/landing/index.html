@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dbpill - AI-Powered Database Optimization</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inconsolata:wght@200..900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #000;
+            --secondary-color: #fff;
+            --accent-color: #888;
+        }
+        
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: "Inconsolata", monospace;
+            font-optical-sizing: auto;
+            font-weight: 400;
+            font-style: normal;
+            font-variation-settings: "wdth" 100;
+            line-height: 1.6;
+            color: var(--primary-color);
+            background-color: var(--secondary-color);
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        header {
+            padding: 20px 0;
+            border-bottom: 1px solid var(--accent-color);
+        }
+        
+        .logo {
+            font-size: 30px;
+            font-weight: 700;
+            text-transform: lowercase;
+            letter-spacing: 2px;
+            background: linear-gradient(to right, rgba(0, 50, 100, 0.2), rgba(100, 0, 0, 0.2));
+            display: inline-block;
+            padding: 0 20px;
+            border-radius: 30px;
+            position: relative;
+            left: -20px;
+        }
+        
+        .hero {
+            padding: 60px 0;
+            background-color: rgba(30, 30, 30, 0.8);
+            color: rgba(255, 255, 255, 0.8);
+
+        }
+        
+        h1 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        
+        .subheading {
+            font-size: 16px;
+            margin-bottom: 40px;
+            max-width: 600px;
+        }
+        
+        .cta-container {
+            margin-bottom: 30px;
+            text-align: center;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background-color: rgba(119, 255, 0, 0.617);
+            color: var(--secondary-color);
+            padding: 10px 20px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 30px;
+            line-height: 30px;
+            transition: background-color 0.3s ease;
+        }
+        
+        .cta-button:hover {
+            background-color: var(--accent-color);
+        }
+        
+        .one-time-fee {
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+            font-size: 15px;
+        }
+
+        .motivation {
+            color: #fff;
+            padding: 10px 0;
+            margin: 0;
+            background-color: rgba(138, 83, 0, 0.706);
+        }
+        
+        .features {
+            margin-top: 60px;
+        }
+        
+        .feature {
+            text-align: left;
+        }
+        
+        .feature h2 {
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: 400;
+            color: rgba(30, 0, 0, 0.4);
+        }
+        
+        .feature p {
+            font-size: 14px;
+        }
+        
+        footer {
+            border-top: 1px solid rgba(0, 0, 0, 0.1);
+            color: rgba(0, 0, 0, 0.5);
+            padding: 20px 0;
+            margin-top: 60px;
+            font-size: 12px;
+        }
+
+        .accent-1 {
+            border-bottom: 1px solid rgba(85, 205, 85, 1);
+            font-weight: 600;
+        }
+
+        .accent-2 {
+            border-bottom: 1px solid rgba(221, 125, 60, 1);
+            font-weight: 600;
+        }
+
+        .accent-3 {
+            border-bottom: 1px solid rgba(75, 78, 255, 1);
+            font-weight: 600;
+        }
+
+
+
+        .diagram {
+            max-width: 100%;
+            max-width: 700px;
+            margin: 40px auto;
+            display: block;
+        }
+
+        .command-summary {
+            display: block;
+            padding: 20px 30px;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <section class="hero">
+            <div class="container">
+                <div class="logo">dbpill</div>
+                <h1>Intercept, Profile & Optimize All Queries</h1>
+
+                <img class="diagram" src="./dbpill_diagram.svg" alt="dbpill workflow diagram" />
+
+                
+
+                <div class="cta-container">
+                    <a href="#" class="cta-button">
+                        Buy Executable<br />
+                        $50<br />
+                        <span class="one-time-fee">
+                            <ul style="list-style-type: none; padding: 0; margin: 0;">
+                                <li>One-time fee</li>
+                            </ul>
+                        </span>
+                    </a>
+                    <a href="#" class="cta-button">
+                        Buy Source Code<br />
+                        $250<br />
+                        <span class="one-time-fee">
+                            <ul style="list-style-type: none; padding: 0; margin: 0;">
+                                <li>One-time fee</li>
+                            </ul>
+                        </span>
+                    </a>
+                    <br />
+                    Money back if you don't like it
+                </div>
+                
+
+                <p><code class="command-summary">
+                    <span style="color: #999;">$</span> <span style="color: #fff19f;">./dbpill --db="postgresql://user@host:5432/db"</span>
+                    <br />
+                    <span style="color: #999;">PostgreSQL proxy running on port <span style="color: #ccc;">:5433</span><br />Web interface for monitoring intercepted queries running on <span style="color: #ccc;">http://localhost:3000</span></span>
+                </code></p> 
+            </div>
+        </section>
+
+        <section class="motivation">
+
+            <div class="container">
+                <p>Growing startups' #1 money waster is the under-optimized SQL server. Stop normalizing spending hundreds of thousands on DB replicas, caching &amp; microservices when the fix was a one-liner index fix.</p>
+                <p class="subheading">dbpill intercepts & profiles all your SQL queries, and then suggests & applies index improvements using latest AI analysis. Boost your performance instantly.</p>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="container">
+                <div class="feature">
+                    <h2>Intercept all queries your app makes</h2>
+                    <p><span class='accent-1'>No code changes required.</span> dbpill runs a SQL proxy that analyzes your queries in real-time to identify optimization opportunities.</p>
+                </div>
+                <div class="feature">
+                    <h2>Automated Indexing</h2>
+                    <p><span class="accent-2">One-click apply, one-click revert.</span> Instantly apply suggested index improvements to boost your database performance.</p>
+                </div>
+                <div class="feature">
+                    <h2>Performance Summary</h2>
+                    <p><span class="accent-3">No guesswork, see exactly how performance changed.</span> Get a detailed performance summary of your queries pre and post-indexing.</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 dbpill. All rights reserved.</p>
+        </div>
+    </footer>
+</body>
+</html>
