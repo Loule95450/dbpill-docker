@@ -190,7 +190,12 @@ export function QueryDetailsBar({
                         return (
                           <StatsTableRow key={inst.instance_id}>
                             {Array.from({ length: maxParams }, (_, paramIndex) => (
-                              <StatsTableLabelCell key={paramIndex} style={{ maxWidth: '150px', wordBreak: 'break-word' }}>
+                              <StatsTableLabelCell key={paramIndex} style={{ 
+                                maxWidth: '150px', 
+                                whiteSpace: 'nowrap', 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis' 
+                              }}>
                                 {parsedParams[paramIndex] || ''}
                               </StatsTableLabelCell>
                             ))}

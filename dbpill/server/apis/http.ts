@@ -298,6 +298,16 @@ export function setup_routes(app: any, io: any) {
         res.json(newIndexes);
     });
 
+    app.post('/api/reset_query_logs', async (req, res) => {
+        try {
+            await queryLogger.resetQueryData();
+            res.json({ success: true, message: 'Query logs cleared successfully' });
+        } catch (error) {
+            console.error('Error resetting query logs:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
+
     app.get('/view_suggestion', async (req, res) => {
         const queryId = req.query.query_id as string;
         const query_info = await queryLogger.getQueryStats(parseInt(queryId));

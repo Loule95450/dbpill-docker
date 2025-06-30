@@ -319,7 +319,6 @@ const listener = net.createServer((rawClient) => {
         console.error('[proxy] rawClient error (pre-TLS):', err);
     });
     
-    // Set up data handler
     let hasReceivedData = false;
     
     const handleFirstData = (first8: Buffer) => {
@@ -402,26 +401,19 @@ const listener = net.createServer((rawClient) => {
         }
     };
     
+    // Register listeners to capture the very first bytes as soon as they arrive, without waiting for the fallback timeout
+    rawClient.once('data', handleFirstData);
+    rawClient.once('readable', () => {
+        const chunkBuf = rawClient.read();
+        if (chunkBuf) {
+            handleFirstData(chunkBuf);
+        }
+    });
+    
     // Use both 'data' and 'readable' events to catch data
     const chunk = rawClient.read(0);  // just triggers the 'readable', no drain
     
-    // Add a timeout as fallback
-    const timeout = setTimeout(() => {
-        if (!hasReceivedData) {
-            console.log('[proxy] No data received after 5 seconds, checking if readable...');
-            const chunk = rawClient.read();
-            if (chunk) {
-                console.log('[proxy] Found buffered data on timeout');
-                handleFirstData(chunk);
-            } else {
-                console.log('[proxy] No buffered data found, connection may be stalled');
-                rawClient.destroy();
-            }
-        }
-    }, 5000);
-    
     rawClient.on('close', () => {
-        clearTimeout(timeout);
         console.log('[proxy] rawClient closed');
     });
 });

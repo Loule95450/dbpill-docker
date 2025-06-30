@@ -340,6 +340,12 @@ ORDER BY
     `, [llm_response, suggested_indexes, query_id]);
   }
   
+    async resetQueryData(): Promise<void> {
+        // Delete all query instances first (foreign key constraint)
+        await this.exec('DELETE FROM query_instances');
+        // Delete all queries
+        await this.exec('DELETE FROM queries');
+    }
 
     async close(): Promise<void> {
         if (this.db) {

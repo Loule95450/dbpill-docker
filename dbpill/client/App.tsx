@@ -10,9 +10,9 @@ import styled from 'styled-components';
 
 import './App.css';
 
-import { Home } from './components/Home';
 import { QueryList } from './components/QueryList';
 import { Configs } from './components/Configs';
+import { About } from './components/About';
 
 import { AppContext, AppProvider } from './context/AppContext';
 import { MainProps } from 'shared/main_props';
@@ -121,11 +121,9 @@ function NavBarContent({ args }: { args: MainProps['args'] }) {
     <>
       <TextLogo>dbpill</TextLogo>
       {/* RouterNavLink automatically adds the `active` class */}
-      <StyledNavLink to="/" end>
-        Instructions
-      </StyledNavLink>
       <StyledNavLink to="/queries">Queries</StyledNavLink>
       <StyledNavLink to="/config">Config</StyledNavLink>
+      <StyledNavLink to="/about">About</StyledNavLink>
 
       {/* Show current DB connection info and LLM info */}
       {(() => {
@@ -203,9 +201,10 @@ function App({ args }: MainProps) {
 
           <MainContent>
             <Routes>
-              <Route path="/" element={<Home />} />
+              <Route path="/" element={<QueryList />} />
               <Route path="/queries" element={<QueryList />} />
               <Route path="/config" element={<Configs />} />
+              <Route path="/about" element={<About />} />
             </Routes>
           </MainContent>
         </Container>

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { AppContext } from '../context/AppContext';
 import styled from 'styled-components';
 
 import {
-  GlobalStats,
   QuerySort,
   QuerySortOption,
   TableContainer,
@@ -45,6 +45,34 @@ const CardWrapper = styled.div`
   flex-direction: column;
 `;
 
+const StatsHeader = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+`;
+
+const StatsText = styled.div`
+  color: rgba(255, 255, 255, 0.7);
+`;
+
+const InstructionsContainer = styled.div`
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+  
+  h1 {
+    margin-bottom: 20px;
+    color: color(display-p3 0.964 0.7613 0.3253);
+  }
+  
+  p {
+    margin-bottom: 15px;
+    color: rgba(255, 255, 255, 0.9);
+  }
+`;
+
 export function QueryList() {
   const [stats, setStats] = useState<any[]>([]);
   const [orderBy, setOrderBy] = useState<string>('avg_exec_time');
@@ -52,7 +80,9 @@ export function QueryList() {
   const [loadingSuggestions, setLoadingSuggestions] = useState<{ [key: string]: boolean }>({});
   const [rerunning, setRerunning] = useState<{ [key: string]: boolean }>({});
   const [expandedQueries, setExpandedQueries] = useState<{ [key: string]: boolean }>({});
+  const [resetting, setResetting] = useState<boolean>(false);
   const navigate = useNavigate();
+  const { args } = useContext(AppContext);
 
   const toggleQueryExpansion = (queryId: string) => {
     setExpandedQueries(prev => ({
@@ -68,6 +98,34 @@ export function QueryList() {
       setOrderDirection('desc');
     }
     setOrderBy(column);
+  };
+
+  const handleReset = async () => {
+    if (!confirm('Are you sure you want to clear all query logs? This action cannot be undone.')) {
+      return;
+    }
+    
+    setResetting(true);
+    try {
+      const response = await fetch('/api/reset_query_logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        setStats([]);
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Failed to reset query logs');
+      }
+    } catch (error) {
+      console.error('Error resetting query logs:', error);
+      alert('Failed to reset query logs');
+    } finally {
+      setResetting(false);
+    }
   };
 
   const handleRerun = (queryId: string) => {
@@ -188,8 +246,6 @@ export function QueryList() {
       });
   };
 
-
-
   useEffect(() => {
     fetch(`/api/all_queries?orderBy=${orderBy}&direction=${orderDirection}`, {
       method: 'GET',
@@ -210,12 +266,41 @@ export function QueryList() {
     columns.splice(columns.indexOf('query_id'), 1);
   }
 
+  // Show instructions if no queries are available
+  if (stats.length === 0) {
+    return (
+      <InstructionsContainer>
+        <h1>Instructions</h1>
+        {args && (
+          <>
+            <p>
+              dbpill is running on port {args.proxyPort}. Change your app's PostgreSQL
+              connection to port {args.proxyPort} to start intercepting queries.
+            </p>
+            <p>Once you start running queries through dbpill, they will appear here for analysis and optimization.</p>
+            <p>You can reset all dbpill-triggered changes from the Config tab.</p>
+          </>
+        )}
+      </InstructionsContainer>
+    );
+  }
+
   return (
     <div>
-      <GlobalStats>
-        {stats.length} unique queries captured{' '}
-        {stats.reduce((acc, stat) => acc + stat.num_instances, 0)} times
-      </GlobalStats>
+      <StatsHeader>
+        <StatsText>
+          {stats.length} unique queries captured{' '}
+          {stats.reduce((acc, stat) => acc + stat.num_instances, 0)} times
+        </StatsText>
+        <ActionButton
+          $variant="danger"
+          onClick={handleReset}
+          disabled={resetting}
+          style={{ padding: '4px 8px', fontSize: '12px' }}
+        >
+          {resetting ? <LoadingIndicator>Resetting...</LoadingIndicator> : 'Reset all ⌫'}
+        </ActionButton>
+      </StatsHeader>
       <QuerySort>
 
         <QuerySortOption
