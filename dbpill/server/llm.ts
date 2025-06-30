@@ -4,7 +4,7 @@ import axios from 'axios';
 import argv from './args';
 
 function getCredentials(service: string, key: string): string {
-    return argv.anthropic_api_key;
+    return argv['llm-api-key'] || argv.llmApiKey;
 }
 
 export interface Completion {

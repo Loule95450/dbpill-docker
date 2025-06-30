@@ -121,7 +121,7 @@ function App({ args }: MainProps) {
             </StyledNavLink>
             <StyledNavLink to="/queries">Queries</StyledNavLink>
 
-            {/* Show current DB connection info */}
+            {/* Show current DB connection info and LLM info */}
             {(() => {
               try {
                 const dbUrl = new URL(args.db);
@@ -129,7 +129,35 @@ function App({ args }: MainProps) {
                 const port = dbUrl.port || '5432';
                 const dbName = dbUrl.pathname.replace(/^\/+/, '');
                 const proxyPort = args['proxy-port'] || args.proxyPort || 5433;
-                return <DbInfo>{`:${proxyPort} → ${host}:${port}/${dbName}`}</DbInfo>;
+                
+                // Get LLM info
+                const llmEndpoint = args['llm-endpoint'] || args.llmEndpoint || 'anthropic';
+                const llmModel = args['llm-model'] || args.llmModel || 'claude-sonnet-4';
+                
+                // Format LLM provider name for display
+                let llmProvider = llmEndpoint;
+                if (llmEndpoint === 'anthropic') {
+                  llmProvider = 'Anthropic';
+                } else if (llmEndpoint === 'openai') {
+                  llmProvider = 'OpenAI';
+                } else if (llmEndpoint.startsWith('http')) {
+                  // Custom URL - extract domain for display
+                  try {
+                    const url = new URL(llmEndpoint);
+                    llmProvider = url.hostname;
+                  } catch {
+                    llmProvider = 'Custom';
+                  }
+                }
+                
+                return (
+                  <DbInfo>
+                    <div>{`:${proxyPort} → ${host}:${port}/${dbName}`}</div>
+                    <div style={{ fontSize: '12px', opacity: 0.7 }}>
+                      {llmProvider} • {llmModel}
+                    </div>
+                  </DbInfo>
+                );
               } catch (_) {
                 return null;
               }
