@@ -1,5 +1,3 @@
-
-
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from 'cors';
@@ -7,11 +5,11 @@ import nocache from "nocache";
 import express from "express";
 import { getMainProps } from "server/main_props";
 
-import { QueryAnalyzer } from '../query_analyzer';
 import { prompt_claude } from '../llm';
 import '../proxy';
 
 import { queryAnalyzer } from '../proxy';
+import { generateSuggestionPrompt } from '../prompt_generator';
 
 const queryLogger = queryAnalyzer.logger;
 
@@ -33,13 +31,83 @@ export function setup_routes(app: any, io: any) {
     app.get('/api/all_queries', async (req, res) => {
         const orderBy = req.query.orderBy as string || 'query_id';
         const orderDirection = req.query.direction as string || 'desc';
-        const stats = await queryLogger.getQueryGroups({orderBy, orderDirection});
+        const stats = await queryLogger.getQueryGroups({
+            orderBy,
+            orderDirection,
+            host: queryAnalyzer.host,
+            database: queryAnalyzer.database,
+            port: queryAnalyzer.port,
+        });
         res.json({ stats, orderBy, orderDirection: orderDirection.toLowerCase() });
     });
 
     app.get('/api/query/:query_id', async (req, res) => {
         const queryId = req.params.query_id as string;
         const queryData = await queryLogger.getQueryGroup(parseInt(queryId));
+
+        if (!queryData) {
+            res.status(404).json({ error: 'query not found' });
+            return;
+        }
+
+        // If we already have an LLM response stored for this query, generate the corresponding prompt preview
+        // so that the frontend can show it without the user having to rerun the suggestion flow.
+        if (queryData.llm_response) {
+            try {
+                // Use the most recent instance so that the prompt preview is consistent with the stored response
+                const instances = await queryLogger.getQueryInstances(parseInt(queryId));
+                if (instances.length > 0) {
+                    const latestInstance = instances[instances.length - 1];
+                    let planJson: any = null;
+                    try {
+                        planJson = JSON.parse(latestInstance.query_plan);
+                    } catch (_) {
+                        planJson = null;
+                    }
+
+                    if (planJson) {
+                        // Helper to extract relation names from a JSON plan
+                        function extractRelationNames(plan: any): string[] {
+                            const relationNames: string[] = [];
+                            function traverse(obj: any) {
+                                if (obj && typeof obj === 'object') {
+                                    if ('Relation Name' in obj) {
+                                        // @ts-ignore – dynamic key access
+                                        relationNames.push(obj['Relation Name']);
+                                    }
+                                    for (const key in obj) {
+                                        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                                            traverse(obj[key]);
+                                        }
+                                    }
+                                } else if (Array.isArray(obj)) {
+                                    obj.forEach(traverse);
+                                }
+                            }
+                            traverse(plan);
+                            return [...new Set(relationNames)];
+                        }
+
+                        const tables = extractRelationNames(planJson);
+                        const table_defs = await Promise.all(tables.map(table => queryAnalyzer.getTableStructure(table)));
+
+                        const prompt = generateSuggestionPrompt({
+                            queryText: queryData.query,
+                            queryPlanJson: planJson,
+                            tableDefinitions: table_defs,
+                            appliedIndexes: queryData.applied_indexes,
+                        });
+
+                        // Attach but do not persist – this is only for UI convenience
+                        // @ts-ignore
+                        queryData.prompt_preview = prompt;
+                    }
+                }
+            } catch (err) {
+                console.error('Error generating prompt preview:', err);
+            }
+        }
+
         res.json(queryData);
     });
 
@@ -57,6 +125,32 @@ export function setup_routes(app: any, io: any) {
         const newQueryData = await queryLogger.getQueryGroup(parseInt(queryId));
         res.json(newQueryData);
 
+    });
+
+    app.get('/api/analyze_query_with_params', async (req, res) => {
+        const queryId = req.query.query_id as string;
+        const paramsStr = req.query.params as string;
+        
+        const queryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        
+        if (!queryData) {
+            res.status(404).json({ error: 'Query not found' });
+            return;
+        }
+
+        let params;
+        try {
+            params = JSON.parse(paramsStr);
+        } catch (error) {
+            res.status(400).json({ error: 'Invalid params format' });
+            return;
+        }
+
+        const analysis = await queryAnalyzer.analyze({query: queryData.query, params});
+        await queryAnalyzer.saveAnalysis(analysis);
+
+        const newQueryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        res.json(newQueryData);
     });
 
     app.get('/api/apply_suggestions', async (req, res) => {
@@ -177,6 +271,75 @@ export function setup_routes(app: any, io: any) {
         res.json(indexes);
     });
 
+    app.get('/api/relevant_tables', async (req, res) => {
+        const queryId = req.query.query_id as string;
+        if (!queryId) {
+            res.status(400).json({ error: 'query_id is required' });
+            return;
+        }
+
+        const queryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        if (!queryData) {
+            res.status(404).json({ error: 'query not found' });
+            return;
+        }
+
+        // Get latest instance to extract plan
+        const instances = await queryLogger.getQueryInstances(parseInt(queryId));
+        if (instances.length === 0) {
+            res.json({});
+            return;
+        }
+
+        const latestInstance = instances[0];
+        let planJson: any = null;
+        try {
+            planJson = JSON.parse(latestInstance.query_plan);
+        } catch (_) {
+            planJson = null;
+        }
+
+        if (!planJson) {
+            res.json({});
+            return;
+        }
+
+        // Helper to extract relation names
+        function extractRelationNames(plan: any): string[] {
+            const relationNames: string[] = [];
+            function traverse(obj: any) {
+                if (obj && typeof obj === 'object') {
+                    if ('Relation Name' in obj) {
+                        relationNames.push(obj['Relation Name']);
+                    }
+                    for (const key in obj) {
+                        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                            traverse(obj[key]);
+                        }
+                    }
+                } else if (Array.isArray(obj)) {
+                    obj.forEach(traverse);
+                }
+            }
+            traverse(plan);
+            return [...new Set(relationNames)];
+        }
+
+        const tables = extractRelationNames(planJson);
+        const infoPromises = tables.map(async (t) => {
+            const stats = await queryAnalyzer.getTableSize(t);
+            const table_definition = await queryAnalyzer.getTableStructure(t);
+            return [t, { ...stats, table_definition }] as const;
+        });
+        const pairs = await Promise.all(infoPromises);
+        const result: Record<string, { table_size_bytes: number; estimated_rows: number; table_definition: string }> = {};
+        pairs.forEach(([name, info]) => {
+            result[name] = info;
+        });
+
+        res.json(result);
+    });
+
     app.get('/api/suggest', async (req, res) => {
         const queryId = req.query.query_id as string;
         const stats = await queryLogger.getQueryGroup(parseInt(queryId));
@@ -218,61 +381,13 @@ export function setup_routes(app: any, io: any) {
 
         const applied_indexes = stats.applied_indexes;
 
-        const prompt = `Given the following PostgreSQL query, query plan & table definitions, suggest only one index improvement that would result in significantly faster query execution. Generally avoid partial indexes unless you're *certain* it will lead to orders-of-magnitude improvements. Think through the query, the query plan, the indexes the plan used, the indexes already present on the tables, and come up with a plan. Then, provide a single code block with all the index proposals together at the end. i.e.:
-\`\`\`sql
-CREATE INDEX dbpill_index_name_upper ON table_name (column_name1, some_function(column_name2));
-\`\`\`
+        const prompt = generateSuggestionPrompt({
+            queryText: stats.query,
+            queryPlanJson: queryPlan,
+            tableDefinitions: table_defs,
+            appliedIndexes: applied_indexes,
+        });
 
-Make sure the suggested index is to improve the provided query specifically, not other hypothetical queries. Pay close attention to the query, and make sure any data transformation in the where clause is also applied to the index declaration.
-
-Always prefix the index name with dbpill_ to avoid conflicts with existing indexes.
-
-Here are some general guidelines for index suggestions:
-
-Index Scan vs. Index Only Scan: If you see many Index Scans where Index Only Scans could be used, it might indicate that you could benefit from including more columns in your index.
-
-Bitmap Heap Scan followed by Bitmap Index Scan: While not necessarily bad, these can sometimes be improved by creating a more specific index.
-
-High-cost Index Scans: If the cost of an Index Scan is unexpectedly high, it might indicate that the index is not selective enough.
-
-Filter operations after Seq Scan or Index Scan: This often indicates that the filter condition could be included in an index.
-
-Large number of rows in Seq Scan: If a Seq Scan is reading a large portion of a big table, an index might help.
-
-Sort operations: If you see expensive sort operations, consider if an index could eliminate the need for sorting.
-
-Hash Join or Merge Join instead of Nested Loop: For join operations, if you're seeing Hash Joins or Merge Joins where you expect Nested Loops, it might indicate missing join indexes.
-
-High-cost Nested Loop operations: Even with Nested Loops, if the cost is high, better indexes might help.
-
-Multiple Index Scans on the same table: This might suggest that a multi-column index could be beneficial.
-
-Parallel operations on smaller tables: If PostgreSQL is using parallel operations on relatively small tables, it might indicate missing indexes.
-
-
-** Query details **
-
-${stats.query}
-
-** Query Plan **
-
-${JSON.stringify(queryPlan, null, 2)}
-
-** Table Definitions **
-
-${table_defs.join('\n\n')}
-
-${applied_indexes ? `
-** Notes **
-
-On a previous attempt, the following indexes were suggested adn applied, however it did not work very well:
-${applied_indexes}
-` : ``}
-`;
-
-        // console.log(prompt);
-
-        res.header('Content-Type', 'text/plain');
         const response = await prompt_claude({ prompt, temperature: 0 });
 
         // the last ```sql block in the response is the suggested indexes
@@ -297,6 +412,11 @@ ${applied_indexes}
             suggested_indexes,
         });
         const newQueryData = await queryLogger.getQueryGroup(parseInt(queryId));
+        // Attach prompt preview so the client can display it
+        // (not stored in DB, only sent back in this response)
+        // @ts-ignore
+        newQueryData.prompt_preview = prompt;
+
         res.json(newQueryData);
     });
 }

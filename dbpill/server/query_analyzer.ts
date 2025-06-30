@@ -18,10 +18,29 @@ export class QueryAnalyzer {
   private pool: Pool;
   private sessionId: string;
   public logger: QueryLogger;
+  public host: string;
+  public database: string;
+  public port: number;
+  // Cache for table sizes to avoid repeated queries
+  private tableSizeCache: Map<string, { table_size_bytes: number; estimated_rows: number }> = new Map();
 
   constructor(connectionString: string) {
     this.pool = new Pool({ connectionString });
     this.sessionId = Math.random().toString(36).substring(2, 8);
+
+    // Parse connection details for later use (e.g. filtering logs by DB)
+    try {
+      const url = new URL(connectionString);
+      this.host = url.hostname;
+      // Remove leading slashes in pathname to obtain DB name
+      this.database = url.pathname.replace(/^\/+/g, '');
+      this.port = url.port ? parseInt(url.port, 10) : 5432;
+    } catch (_) {
+      // Fallbacks in case the connection string cannot be parsed
+      this.host = 'localhost';
+      this.database = '';
+      this.port = 5432;
+    }
 
     const logger = new QueryLogger('dbpill.sqlite.db');
     this.logger = logger;
@@ -35,9 +54,6 @@ export class QueryAnalyzer {
       'SHOW',
       'SET',
       'RESET',
-      'BEGIN',
-      'COMMIT',
-      'ROLLBACK',
       'START TRANSACTION',
       'SAVEPOINT',
       'RELEASE SAVEPOINT',
@@ -58,21 +74,12 @@ export class QueryAnalyzer {
       'LOCK',
       'GRANT',
       'REVOKE',
-      'CREATE ROLE',
-      'DROP ROLE',
-      'ALTER ROLE',
-      'CREATE USER',
-      'DROP USER',
-      'ALTER USER',
-      'CREATE DATABASE',
-      'DROP DATABASE',
-      'ALTER DATABASE',
-      'CREATE TABLESPACE',
-      'DROP TABLESPACE',
-      'ALTER TABLESPACE',
-      'COMMENT ON',
-      'SECURITY LABEL',
       'COPY',
+      'CREATE',
+      'DROP',
+      'ALTER',
+      'COMMENT',
+      'SECURITY',
       '\\',  // psql meta-commands
     ];
 
@@ -166,23 +173,27 @@ export class QueryAnalyzer {
 
         // Table stats
         const statsQuery = `
-        SELECT pg_size_pretty(pg_total_relation_size($1)) as total_size,
-               pg_size_pretty(pg_table_size($1)) as table_size,
-               pg_size_pretty(pg_indexes_size($1)) as index_size,
-               pg_stat_get_live_tuples($1::regclass) as live_tuples,
-               pg_stat_get_dead_tuples($1::regclass) as dead_tuples
-        FROM pg_class
-        WHERE oid = $1::regclass;
-      `;
+        SELECT pg_total_relation_size($1::regclass)          AS total_size_bytes,
+               pg_table_size($1::regclass)                  AS table_size_bytes,
+               pg_indexes_size($1::regclass)                AS index_size_bytes,
+               pg_size_pretty(pg_total_relation_size($1::regclass))  AS total_size_pretty,
+               pg_size_pretty(pg_table_size($1::regclass))           AS table_size_pretty,
+               pg_size_pretty(pg_indexes_size($1::regclass))         AS index_size_pretty,
+               pg_stat_get_live_tuples($1::regclass)       AS live_tuples,
+               pg_stat_get_dead_tuples($1::regclass)       AS dead_tuples,
+               (SELECT reltuples FROM pg_class WHERE oid = $1::regclass) AS estimated_rows
+        `;
         const statsResult = await client.query(statsQuery, [`${schemaName}.${tableName}`]);
         if (statsResult.rows.length > 0) {
           const stats = statsResult.rows[0];
           output += 'Table Statistics:\n';
-          output += `- Total Size: ${stats.total_size}\n`;
-          output += `- Table Size: ${stats.table_size}\n`;
-          output += `- Index Size: ${stats.index_size}\n`;
+          output += `- Total Size: ${stats.total_size_pretty}\n`;
+          output += `- Table Size: ${stats.table_size_pretty}\n`;
+          output += `- Index Size: ${stats.index_size_pretty}\n`;
           output += `- Live Tuples: ${stats.live_tuples}\n`;
           output += `- Dead Tuples: ${stats.dead_tuples}\n`;
+          output += `- Estimated Rows: ${stats.estimated_rows}\n`;
+          output += `- Table Size (bytes): ${stats.table_size_bytes}\n`;
         }
 
       } catch (error) {
@@ -200,6 +211,48 @@ export class QueryAnalyzer {
     return output;
   }
 
+  /**
+   * Return raw size information for a table (bytes + estimated rows).
+   * Results are cached in-memory for the lifetime of the QueryAnalyzer instance
+   * to avoid repeated calls for the same table name.
+   */
+  async getTableSize(tableName: string): Promise<{ table_size_bytes: number; estimated_rows: number }> {
+    if (this.tableSizeCache.has(tableName)) {
+      // Return cached value if present
+      return this.tableSizeCache.get(tableName)!;
+    }
+
+    let client: PoolClient | null = null;
+    try {
+      client = await this.pool.connect();
+
+      const sizeQuery = `
+        SELECT pg_table_size(c.oid) AS table_size_bytes, c.reltuples AS estimated_rows
+        FROM pg_class c
+        WHERE c.relname = $1 AND c.relkind = 'r'
+        LIMIT 1;
+      `;
+      const { rows } = await client.query(sizeQuery, [tableName]);
+
+      if (rows.length === 0) {
+        // Fallback: unknown table – cache zeroes to avoid repeated look-ups
+        const fallback = { table_size_bytes: 0, estimated_rows: 0 };
+        this.tableSizeCache.set(tableName, fallback);
+        return fallback;
+      }
+
+      const info = {
+        table_size_bytes: Number(rows[0].table_size_bytes),
+        estimated_rows: Number(rows[0].estimated_rows),
+      };
+      this.tableSizeCache.set(tableName, info);
+      return info;
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+  }
 
   async analyze({ query, params = [] }: AnalyzeParams): Promise<any> {
     if (this.shouldSkipAnalysis(query)) {
@@ -210,6 +263,7 @@ export class QueryAnalyzer {
         queryPlan: null,
         planTime: 0,
         execTime: 0,
+        tableSizes: {},
       };
     }
 
@@ -231,9 +285,42 @@ export class QueryAnalyzer {
           const planTime = queryPlan['Planning Time'];
           const execTime = queryPlan['Execution Time'];
 
+          // Extract table names from the plan to collect size statistics
+          function extractRelationNames(plan: any): string[] {
+            const relationNames: string[] = [];
+            function traverse(obj: any) {
+              if (obj && typeof obj === 'object') {
+                if ('Relation Name' in obj) {
+                  relationNames.push(obj['Relation Name']);
+                }
+                for (const key in obj) {
+                  if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                    traverse(obj[key]);
+                  }
+                }
+              } else if (Array.isArray(obj)) {
+                obj.forEach(traverse);
+              }
+            }
+            traverse(plan);
+            return [...new Set(relationNames)];
+          }
+
+          let tableSizes: Record<string, { table_size_bytes: number; estimated_rows: number }> = {};
+          try {
+            const tables = extractRelationNames(queryPlan);
+            const sizePromises = tables.map(async (t) => ({ name: t, info: await this.getTableSize(t) }));
+            const sizes = await Promise.all(sizePromises);
+            sizes.forEach(({ name, info }) => {
+              tableSizes[name] = info;
+            });
+          } catch (_) {
+            // Ignore errors in table size retrieval – analysis should still succeed
+          }
+
           const sessionId = this.sessionId;
           console.log(query);
-          return { sessionId, query, params, queryPlan, planTime, execTime };
+          return { sessionId, query, params, queryPlan, planTime, execTime, tableSizes };
         }
       }
 
@@ -245,6 +332,7 @@ export class QueryAnalyzer {
         queryPlan: null,
         planTime: 0,
         execTime: 0,
+        tableSizes: {},
       };
     } catch (error) {
       console.error(query);
@@ -258,6 +346,7 @@ export class QueryAnalyzer {
         queryPlan: null,
         planTime: 0,
         execTime: 0,
+        tableSizes: {},
       };
     } finally {
       if (client) {
@@ -275,8 +364,10 @@ export class QueryAnalyzer {
       queryPlan: JSON.stringify(queryPlan, null, 2),
       planTime,
       execTime,
+      host: this.host,
+      database: this.database,
+      port: this.port,
     });
-
   }
 
   async applyIndexes(indexes: string) {

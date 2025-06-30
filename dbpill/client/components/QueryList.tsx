@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import styled from 'styled-components';
 
 import {
   GlobalStats,
@@ -32,9 +33,17 @@ import {
   NumUnit,
 } from '../styles/Styled';
 
+import { QueryDetailsBar } from './QueryDetailsBar';
+
 import { formatNumber } from '../utils/formatNumber';
 import { highlightSQL } from '../utils/sqlHighlighter';
 
+// --- Local styled components for the new bottom tab bar redesign ---
+
+const CardWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
 
 export function QueryList() {
   const [stats, setStats] = useState<any[]>([]);
@@ -61,6 +70,21 @@ export function QueryList() {
     setOrderBy(column);
   };
 
+  const handleRerun = (queryId: string) => {
+    setRerunning(prev => ({ ...prev, [queryId]: true }));
+    fetch(`/api/analyze_query?query_id=${queryId}`)
+      .then(response => response.json())
+      .then(data => {
+        setStats(prevStats => {
+          const newStats = [...prevStats];
+          const idx = newStats.findIndex(s => s.query_id === parseInt(queryId));
+          if (idx !== -1) newStats[idx] = { ...newStats[idx], ...data };
+          return newStats;
+        });
+        setRerunning(prev => ({ ...prev, [queryId]: false }));
+      });
+  };
+
   const getSuggestions = (query_id: string) => {
     if (loadingSuggestions[query_id]) {
       return;
@@ -76,10 +100,13 @@ export function QueryList() {
       .then((data) => {
         setStats((prevStats) => {
           const newStats = [...prevStats];
-          const index = newStats.findIndex((stat) => stat.query_id === query_id);
-          newStats[index].llm_response = data.llm_response;
-          newStats[index].suggested_indexes = data.suggested_indexes;
-          newStats[index].applied_indexes = data.applied_indexes;
+          const index = newStats.findIndex((stat) => stat.query_id === parseInt(query_id));
+          if (index !== -1) {
+            newStats[index] = {
+              ...newStats[index],
+              ...data,
+            };
+          }
           return newStats;
         });
       })
@@ -107,12 +134,13 @@ export function QueryList() {
         }
         setStats((prevStats) => {
           const newStats = [...prevStats];
-          const index = newStats.findIndex((stat) => stat.query_id === query_id);
-          newStats[index].llm_response = data.llm_response;
-          newStats[index].suggested_indexes = data.suggested_indexes;
-          newStats[index].applied_indexes = data.applied_indexes;
-          newStats[index].prev_exec_time = data.prev_exec_time;
-          newStats[index].new_exec_time = data.new_exec_time;
+          const index = newStats.findIndex((stat) => stat.query_id === parseInt(query_id));
+          if (index !== -1) {
+            newStats[index] = {
+              ...newStats[index],
+              ...data,
+            };
+          }
           return newStats;
         });
       })
@@ -136,13 +164,13 @@ export function QueryList() {
       .then((data) => {
         setStats((prevStats) => {
           const newStats = [...prevStats];
-          const index = newStats.findIndex((stat) => stat.query_id === query_id);
-          newStats[index].llm_response = data.llm_response;
-          newStats[index].suggested_indexes = data.suggested_indexes;
-          newStats[index].applied_indexes = data.applied_indexes;
-          newStats[index].prev_exec_time = data.prev_exec_time;
-          newStats[index].new_exec_time = data.new_exec_time;
-          newStats[index].last_exec_time = data.last_exec_time;
+          const index = newStats.findIndex((stat) => stat.query_id === parseInt(query_id));
+          if (index !== -1) {
+            newStats[index] = {
+              ...newStats[index],
+              ...data,
+            };
+          }
           return newStats;
         });
       })
@@ -150,6 +178,8 @@ export function QueryList() {
         setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));
       });
   };
+
+
 
   useEffect(() => {
     fetch(`/api/all_queries?orderBy=${orderBy}&direction=${orderDirection}`, {
@@ -178,17 +208,25 @@ export function QueryList() {
         {stats.reduce((acc, stat) => acc + stat.num_instances, 0)} times
       </GlobalStats>
       <QuerySort>
-        <QuerySortOption
-          onClick={() => order('max_exec_time')}
-          $active={orderBy === 'max_exec_time' ? 'true' : undefined}
-        >
-          {orderBy === 'max_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Max time
-        </QuerySortOption>
+
         <QuerySortOption
           onClick={() => order('avg_exec_time')}
           $active={orderBy === 'avg_exec_time' ? 'true' : undefined}
         >
           {orderBy === 'avg_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Avg time
+        </QuerySortOption>
+        <QuerySortOption
+          onClick={() => order('total_time')}
+          $active={orderBy === 'total_time' ? 'true' : undefined}
+        >
+          {orderBy === 'total_time' && (orderDirection === 'asc' ? '▲' : '▼')} Total time
+        </QuerySortOption>
+
+        <QuerySortOption
+          onClick={() => order('max_exec_time')}
+          $active={orderBy === 'max_exec_time' ? 'true' : undefined}
+        >
+          {orderBy === 'max_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Max time
         </QuerySortOption>
         <QuerySortOption
           onClick={() => order('num_instances')}
@@ -202,12 +240,6 @@ export function QueryList() {
         >
           {orderBy === 'prev_exec_time/new_exec_time' && (orderDirection === 'asc' ? '▲' : '▼')} Improvements
         </QuerySortOption>
-        <QuerySortOption
-          onClick={() => order('total_time')}
-          $active={orderBy === 'total_time' ? 'true' : undefined}
-        >
-          {orderBy === 'total_time' && (orderDirection === 'asc' ? '▲' : '▼')} Total time
-        </QuerySortOption>
       </QuerySort>
 
       <TableContainer>
@@ -217,188 +249,168 @@ export function QueryList() {
           const improvement = hasPerformanceData ? stat.prev_exec_time / stat.new_exec_time : 0;
 
           return (
-            <QueryCard key={stat.query_id}>
-              <QueryContentSection>
-                <QueryText $expanded={isExpanded} onClick={() => toggleQueryExpansion(stat.query_id)}>
-                  {highlightSQL(stat.query)}
-                </QueryText>
-              </QueryContentSection>
+            <CardWrapper key={stat.query_id}>
+              <QueryCard>
+                <QueryContentSection>
+                  <QueryText $expanded={isExpanded} onClick={() => toggleQueryExpansion(stat.query_id)}>
+                    {highlightSQL(stat.query)}
+                  </QueryText>
+                </QueryContentSection>
 
-              <QueryStatsSection>
-                <StatsTable>
-                  <StatsTableBody>
-                    <StatsTableRow>
-                      <StatsTableLabelCell>Count</StatsTableLabelCell>
-                      <StatsTableValueCell>
-                        {stat.num_instances}
-                      </StatsTableValueCell>
-                      <StatsTableActionCell>
-                      </StatsTableActionCell>
-                    </StatsTableRow>
-                    <StatsTableRow>
-                      <StatsTableLabelCell>Total Time</StatsTableLabelCell>
-                      <StatsTableValueCell colSpan={2}>{formatNumber(stat.total_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
-                    </StatsTableRow>
-                    <StatsTableRow>
-                      <StatsTableLabelCell>Avg Time</StatsTableLabelCell>
-                      <StatsTableValueCell colSpan={2}>{formatNumber(stat.avg_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
-                    </StatsTableRow>
-                    <StatsTableRow>
-                      <StatsTableLabelCell>Min Time</StatsTableLabelCell>
-                      <StatsTableValueCell colSpan={2}>{formatNumber(stat.min_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
-                    </StatsTableRow>
-                    <StatsTableRow>
-                      <StatsTableLabelCell>Max Time</StatsTableLabelCell>
-                      <StatsTableValueCell colSpan={2}>{formatNumber(stat.max_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
-                    </StatsTableRow>
-                    <StatsTableRow>
-                      <StatsTableLabelCell>Last Time</StatsTableLabelCell>
-                      <StatsTableValueCell colSpan={2}>{formatNumber(stat.last_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
-                    </StatsTableRow>
-                  </StatsTableBody>
-                </StatsTable>
-
-                <ActionGroup style={{ marginTop: 'auto' }}>
-
+                <QueryStatsSection>
+                  <StatsTable>
+                    <StatsTableBody>
+                      <StatsTableRow>
+                        <StatsTableLabelCell>Total</StatsTableLabelCell>
+                        <StatsTableValueCell colSpan={2}>
+                          {formatNumber(stat.total_time)} <NumUnit>ms</NumUnit> <NumUnit>from</NumUnit> {stat.num_instances} <NumUnit>{stat.num_instances === 1 ? 'run' : 'runs'}</NumUnit>
+                        </StatsTableValueCell>
+                      </StatsTableRow>
+                      <StatsTableRow>
+                        <StatsTableLabelCell>Avg</StatsTableLabelCell>
+                        <StatsTableValueCell colSpan={2}>{formatNumber(stat.avg_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
+                      </StatsTableRow>
+                      <StatsTableRow>
+                        <StatsTableLabelCell>Min</StatsTableLabelCell>
+                        <StatsTableValueCell colSpan={2}>{formatNumber(stat.min_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
+                      </StatsTableRow>
+                      <StatsTableRow>
+                        <StatsTableLabelCell>Max</StatsTableLabelCell>
+                        <StatsTableValueCell colSpan={2}>{formatNumber(stat.max_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
+                      </StatsTableRow>
+                      <StatsTableRow>
+                        <StatsTableLabelCell>Last</StatsTableLabelCell>
+                        <StatsTableValueCell colSpan={2}>{formatNumber(stat.last_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
+                      </StatsTableRow>
+                    </StatsTableBody>
+                  </StatsTable>
 
                   <ActionButton
                     $variant="secondary"
-                    onClick={() => {
-                      setRerunning(prev => ({ ...prev, [stat.query_id]: true }));
-                      fetch(`/api/analyze_query?query_id=${stat.query_id}`)
-                        .then(response => response.json())
-                        .then(data => {
-                          setStats(prevStats => {
-                            const newStats = [...prevStats];
-                            const index = newStats.findIndex(stat2 => stat2.query_id === stat.query_id);
-                            newStats[index].prev_exec_time = data.prev_exec_time;
-                            newStats[index].new_exec_time = data.new_exec_time;
-                            newStats[index].last_exec_time = data.last_exec_time;
-                            newStats[index].num_instances = data.num_instances;
-                            return newStats;
-                          });
-                          setRerunning(prev => ({ ...prev, [stat.query_id]: false }));
-                        });
-                    }}
+                    onClick={() => handleRerun(stat.query_id.toString())}
                     disabled={rerunning[stat.query_id]}
+                    style={{ marginTop: '8px', alignSelf: 'flex-start' }}
                   >
                     {rerunning[stat.query_id] ? <LoadingIndicator>Running...</LoadingIndicator> : '↻ Run again'}
                   </ActionButton>
+                </QueryStatsSection>
 
-                  <ActionButton $variant="secondary" onClick={() => navigate(`/query/${stat.query_id}`)}>
-                    📋 Query plan
-                  </ActionButton>
-                </ActionGroup>
-              </QueryStatsSection>
+                <QueryActionsSection>
+                  {!stat.llm_response ? (
+                    <ActionButton
+                      $variant="ai-suggestion"
+                      onClick={() => getSuggestions(stat.query_id)}
+                      disabled={loadingSuggestions[stat.query_id]}
+                    >
+                      {loadingSuggestions[stat.query_id] ? (
+                        <LoadingIndicator>Getting suggestions...</LoadingIndicator>
+                      ) : (
+                        '🤖 Get AI Suggestions'
+                      )}
+                    </ActionButton>
+                  ) : (
+                    <>
+                      {stat.suggested_indexes && (
+                        <SuggestionContainer>
+                          <SuggestionTitleBar $status={stat.applied_indexes ? 'applied' : 'suggested'}>
+                            <SuggestionTitleGroup>
+                              <StatusTag $status={stat.applied_indexes ? 'applied' : 'suggested'}>
+                                {stat.applied_indexes ? 'Applied' : 'Suggested'}
+                              </StatusTag>
+                            </SuggestionTitleGroup>
 
-              <QueryActionsSection>
-                {!stat.llm_response ? (
-                  <ActionButton
-                    $variant="ai-suggestion"
-                    onClick={() => getSuggestions(stat.query_id)}
-                    disabled={loadingSuggestions[stat.query_id]}
-                  >
-                    {loadingSuggestions[stat.query_id] ? (
-                      <LoadingIndicator>Getting suggestions...</LoadingIndicator>
-                    ) : (
-                      '🤖 Get AI Suggestions'
-                    )}
-                  </ActionButton>
-                ) : (
-                  <>
-                    {stat.suggested_indexes && (
-                      <SuggestionContainer>
-                        <SuggestionTitleBar $status={stat.applied_indexes ? 'applied' : 'suggested'}>
-                          <SuggestionTitleGroup>
-                            <StatusTag $status={stat.applied_indexes ? 'applied' : 'suggested'}>
-                              {stat.applied_indexes ? 'Applied' : 'Suggested'}
-                            </StatusTag>
-                          </SuggestionTitleGroup>
+                            <SuggestionActionGroup>
+                              {!stat.applied_indexes && (
+                                <ActionButton
+                                  $variant="secondary"
+                                  onClick={() => {
+                                    setStats(prevStats => {
+                                      const newStats = [...prevStats];
+                                      const index = newStats.findIndex(stat2 => stat2.query_id === stat.query_id);
+                                      newStats[index].llm_response = null;
+                                      newStats[index].suggested_indexes = null;
+                                      newStats[index].applied_indexes = null;
+                                      newStats[index].prev_exec_time = null;
+                                      newStats[index].new_exec_time = null;
+                                      return newStats;
+                                    });
+                                    getSuggestions(stat.query_id);
+                                  }}
+                                >
+                                  ↻ Ask again
+                                </ActionButton>
+                              )}
+                              {!stat.applied_indexes && (
+                                <ActionButton
+                                  $variant="success"
+                                  onClick={() => applySuggestions(stat.query_id)}
+                                  disabled={loadingSuggestions[stat.query_id]}
+                                >
+                                  {loadingSuggestions[stat.query_id] ? (
+                                    <LoadingIndicator>Applying...</LoadingIndicator>
+                                  ) : (
+                                    `⬇ Apply Index${stat.suggested_indexes.trim().split(';').filter(line => line.trim()).length > 1 ? 'es' : ''}`
+                                  )}
+                                </ActionButton>
+                              )}
 
-                          <SuggestionActionGroup>
-                            {!stat.applied_indexes && (
-                              <ActionButton
-                                $variant="secondary"
-                                onClick={() => {
-                                  setStats(prevStats => {
-                                    const newStats = [...prevStats];
-                                    const index = newStats.findIndex(stat2 => stat2.query_id === stat.query_id);
-                                    newStats[index].llm_response = null;
-                                    newStats[index].suggested_indexes = null;
-                                    newStats[index].applied_indexes = null;
-                                    newStats[index].prev_exec_time = null;
-                                    newStats[index].new_exec_time = null;
-                                    return newStats;
-                                  });
-                                  getSuggestions(stat.query_id);
-                                }}
-                              >
-                                ↻ Ask again
-                              </ActionButton>
-                            )}
-                            {!stat.applied_indexes && (
-                              <ActionButton
-                                $variant="success"
-                                onClick={() => applySuggestions(stat.query_id)}
-                                disabled={loadingSuggestions[stat.query_id]}
-                              >
-                                {loadingSuggestions[stat.query_id] ? (
-                                  <LoadingIndicator>Applying...</LoadingIndicator>
-                                ) : (
-                                  `⬇ Apply Index${stat.suggested_indexes.trim().split(';').filter(line => line.trim()).length > 1 ? 'es' : ''}`
-                                )}
-                              </ActionButton>
-                            )}
+                              {stat.applied_indexes && (
+                                <ActionButton
+                                  $variant="danger"
+                                  onClick={() => revertSuggestions(stat.query_id)}
+                                  disabled={loadingSuggestions[stat.query_id]}
+                                >
+                                  {loadingSuggestions[stat.query_id] ? (
+                                    <LoadingIndicator>Reverting...</LoadingIndicator>
+                                  ) : (
+                                    '⬆ Revert'
+                                  )}
+                                </ActionButton>
+                              )}
+                            </SuggestionActionGroup>
+                          </SuggestionTitleBar>
 
-                            {stat.applied_indexes && (
-                              <ActionButton
-                                $variant="danger"
-                                onClick={() => revertSuggestions(stat.query_id)}
-                                disabled={loadingSuggestions[stat.query_id]}
-                              >
-                                {loadingSuggestions[stat.query_id] ? (
-                                  <LoadingIndicator>Reverting...</LoadingIndicator>
-                                ) : (
-                                  '⬆ Revert'
-                                )}
-                              </ActionButton>
-                            )}
-                          </SuggestionActionGroup>
-                        </SuggestionTitleBar>
+                          <SuggestionContent $status={stat.applied_indexes ? 'applied' : 'suggested'}>
+                            <HighlightedSQL>
+                              {highlightSQL(stat.suggested_indexes.trim())}
+                            </HighlightedSQL>
+                          </SuggestionContent>
 
-                        <SuggestionContent $status={stat.applied_indexes ? 'applied' : 'suggested'}>
-                          <HighlightedSQL>
-                            {highlightSQL(stat.suggested_indexes.trim())}
-                          </HighlightedSQL>
-                        </SuggestionContent>
+                          {hasPerformanceData && (
+                            <StatsTable>
+                              <StatsTableBody>
+                                <StatsTableRow>
+                                  <StatsTableLabelCell>Before</StatsTableLabelCell>
+                                  <StatsTableValueCell>{formatNumber(stat.prev_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
+                                  <StatsTableImprovementCell rowSpan={2}>
+                                    <PerformanceBadge $improvement={improvement}>
+                                      {improvement > 2.0 ? '⬆' : improvement < 0.8 ? '⬇' : ''} {formatNumber(improvement)}× improvement
+                                    </PerformanceBadge>
+                                  </StatsTableImprovementCell>
+                                </StatsTableRow>
+                                <StatsTableRow>
+                                  <StatsTableLabelCell>After</StatsTableLabelCell>
+                                  <StatsTableValueCell>
+                                    {formatNumber(stat.new_exec_time)} <NumUnit>ms</NumUnit>
+                                  </StatsTableValueCell>
+                                </StatsTableRow>
+                              </StatsTableBody>
+                            </StatsTable>
+                          )}
+                        </SuggestionContainer>
+                      )}
+                    </>
+                  )}
+                </QueryActionsSection>
+              </QueryCard>
 
-                        {hasPerformanceData && (
-                          <StatsTable>
-                            <StatsTableBody>
-                              <StatsTableRow>
-                                <StatsTableLabelCell>Before</StatsTableLabelCell>
-                                <StatsTableValueCell>{formatNumber(stat.prev_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
-                                <StatsTableImprovementCell rowSpan={2}>
-                                  <PerformanceBadge $improvement={improvement}>
-                                    {improvement > 2.0 ? '⬆' : improvement < 0.8 ? '⬇' : ''} {formatNumber(improvement)}× improvement
-                                  </PerformanceBadge>
-                                </StatsTableImprovementCell>
-                              </StatsTableRow>
-                              <StatsTableRow>
-                                <StatsTableLabelCell>After</StatsTableLabelCell>
-                                <StatsTableValueCell>
-                                  {formatNumber(stat.new_exec_time)} <NumUnit>ms</NumUnit>
-                                </StatsTableValueCell>
-                              </StatsTableRow>
-                            </StatsTableBody>
-                          </StatsTable>
-                        )}
-                      </SuggestionContainer>
-                    )}
-                  </>
-                )}
-              </QueryActionsSection>
-            </QueryCard>
+              <QueryDetailsBar
+                queryId={stat.query_id}
+                hasLlmResponse={!!stat.llm_response}
+                setStats={setStats}
+                stat={stat}
+              />
+            </CardWrapper>
           );
         })}
       </TableContainer>

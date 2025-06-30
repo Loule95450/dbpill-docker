@@ -9,13 +9,10 @@ import io from 'socket.io-client';
 import styled from 'styled-components';
 
 import './App.css';
-// @ts-ignore – kept to avoid breaking any existing usage of the logo import
-import logo from './assets/dbpill.png';
 
 import { Home } from './components/Home';
 import { QueryList } from './components/QueryList';
-import { QueryDetail } from './components/QueryDetail';
-import { AppliedIndexes } from './components/AppliedIndexes';
+
 
 import { AppContext } from './context/AppContext';
 import { MainProps } from 'shared/main_props';
@@ -69,6 +66,12 @@ const NavBar = styled.div`
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 `;
 
+const DbInfo = styled.div`
+  margin-left: auto;
+  font-size: 14px;
+  opacity: 0.8;
+`;
+
 const StyledNavLink = styled(RouterNavLink)`
   cursor: pointer;
   text-decoration: none;
@@ -117,15 +120,26 @@ function App({ args }: MainProps) {
               Instructions
             </StyledNavLink>
             <StyledNavLink to="/queries">Queries</StyledNavLink>
-            <StyledNavLink to="/indexes">Indexes</StyledNavLink>
+
+            {/* Show current DB connection info */}
+            {(() => {
+              try {
+                const dbUrl = new URL(args.db);
+                const host = dbUrl.hostname;
+                const port = dbUrl.port || '5432';
+                const dbName = dbUrl.pathname.replace(/^\/+/, '');
+                const proxyPort = args['proxy-port'] || args.proxyPort || 5433;
+                return <DbInfo>{`:${proxyPort} → ${host}:${port}/${dbName}`}</DbInfo>;
+              } catch (_) {
+                return null;
+              }
+            })()}
           </NavBar>
 
           <MainContent>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/queries" element={<QueryList />} />
-              <Route path="/query/:query_id" element={<QueryDetail />} />
-              <Route path="/indexes" element={<AppliedIndexes />} />
             </Routes>
           </MainContent>
         </Container>

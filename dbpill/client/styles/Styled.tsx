@@ -113,7 +113,7 @@ export const RowIndex = styled.span`
 export const ActionButton = styled.button<{ $variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'ai-suggestion' }>`
   padding: 6px 10px;
   font-family: "Inconsolata", monospace;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(0, 0, 0, 0.1);
@@ -137,19 +137,20 @@ export const ActionButton = styled.button<{ $variant?: 'primary' | 'secondary' |
   `}
 
   ${props => props.$variant === 'ai-suggestion' && `
-    border-color: #3B82F6;
-    color: #3B82F6;
+    border-color:rgb(215, 184, 255);
+    background: rgba(215, 184, 255, 0.1);
+    color:rgb(215, 184, 255);
     padding: 12px 20px;
-    font-size: 12px;
+    font-size: 16px;
     min-width: 140px;
     font-weight: 600;
     width: auto;
     flex-shrink: 0;
     
     &:hover {
-      background: rgba(59, 130, 246, 0.1);
-      border-color: #60A5FA;
-      color: #60A5FA;
+      background: rgba(215, 184, 255, 0.1);
+      border-color:rgb(255, 255, 255);
+      color:rgb(255, 255, 255);
     }
   `}
 
@@ -278,7 +279,7 @@ export const TableContainer = styled.div`
 
 export const QueryCard = styled.div`
   display: flex;
-  border-radius: 10px;
+  border-radius: 10px 10px 0 0;
   box-shadow: 0 3px 5px 0 rgba(0, 0, 0, 0.5);
   overflow: hidden;
 `;
@@ -302,7 +303,8 @@ export const QueryStatsSection = styled(QuerySection)`
 
 export const QueryActionsSection = styled(QuerySection)`
   background: rgba(45, 45, 45, 1);
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
 `;
 
 export const StatusTag = styled.div<{ $status: 'suggested' | 'applied' }>`
@@ -437,6 +439,14 @@ export const StatsTableActionCell = styled.td`
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 `;
 
+export const StatsTableHeaderCell = styled.td`
+  padding: 6px 8px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.02);
+`;
+
 export const StatsTableImprovementCell = styled.td`
   padding: 3px 8px;
   vertical-align: middle;
@@ -484,4 +494,59 @@ export const SuggestionContainer = styled.div`
 
 export const NumUnit = styled.span`
   color: rgba(255, 255, 255, 0.5);
+`;
+
+export const QueryDetailsBottomBar = styled.div`
+  display: flex;
+  width: 100%;
+  background: rgba(35, 35, 35, 1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+  box-shadow: 0 3px 5px 0 rgba(0, 0, 0, 0.5);
+`;
+
+export const QueryDetailsBottomBarSection = styled.div`
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 5px;
+  font-family: 'Inconsolata', monospace;
+  font-size: 11px;
+  user-select: none;
+`;
+
+export const QueryDetailsTabButton = styled.button<{ $active?: boolean }>`
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 10px;
+  color: ${props => (props.disabled ? 'rgba(255, 255, 255, 0.25)' : props.$active ? '#fff' : 'rgba(255, 255, 255, 0.6)')};
+
+  line-height: 40px;
+
+  ${props => props.$active && `
+    background: #000;
+  `}
+
+  &:hover {
+    color: ${props => (props.disabled ? 'rgba(255, 255, 255, 0.25)' : '#fff')};
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.3;
+  }
+`;
+
+export const QueryDetailsPanel = styled.div`
+  background: #000;
+  padding: 12px 20px;
+  margin: 0 10px;
+  border-bottom-left-radius: 10px;
+  border-bottom-right-radius: 10px;
+  font-family: 'Inconsolata', monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
 `;

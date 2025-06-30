@@ -28,6 +28,9 @@ export interface QueryInstance {
 
 export interface QueryGroup {
     query_id: number;
+    host: string;
+    database: string;
+    port: number;
     query: string;
     num_instances: number;
     instances?: QueryInstance[];
@@ -39,6 +42,7 @@ export interface QueryGroup {
     min_exec_time: number;
     max_exec_time: number;
     avg_exec_time: number;
+    total_time: number;
     last_exec_time: number;
     hidden?: boolean;
 }
@@ -56,7 +60,10 @@ export class QueryLogger {
         await this.exec(`
             CREATE TABLE IF NOT EXISTS queries (
                 query_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                query TEXT UNIQUE,
+                host TEXT,
+                database TEXT,
+                port INTEGER,
+                query TEXT,
                 llm_response TEXT,
                 suggested_indexes TEXT,
                 applied_indexes TEXT,
@@ -64,6 +71,11 @@ export class QueryLogger {
                 new_exec_time REAL,
                 hidden BOOLEAN DEFAULT 0
             )
+        `);
+
+        await this.exec(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_queries_unique
+            ON queries(host, database, port, query);
         `);
 
         await this.exec(`
@@ -123,41 +135,75 @@ export class QueryLogger {
         params,
         queryPlan,
         planTime,
-        execTime
+        execTime,
+        host,
+        database,
+        port
     }: {
         sessionId: string,
         query: string,
         params: string,
         queryPlan: string,
         planTime: number,
-        execTime: number
+        execTime: number,
+        host: string,
+        database: string,
+        port: number
     }): Promise<void> {
-          // Insert or ignore the query
-          await this.run(`
-              INSERT OR IGNORE INTO queries (query)
-              VALUES (?)
-          `, [query]);
+        // Insert or ignore the query grouped by host/database/port
+        await this.run(`
+            INSERT OR IGNORE INTO queries (query, host, database, port)
+            VALUES (?, ?, ?, ?)
+        `, [query, host, database, port]);
 
-          // Get the query_id
-          const { query_id } = await this.get('SELECT query_id FROM queries WHERE query = ?', [query]);
+        // Get the query_id for this connection-specific query
+        const { query_id } = await this.get('SELECT query_id FROM queries WHERE query = ? AND host = ? AND database = ? AND port = ?', [query, host, database, port]);
 
-          // Insert the query instance
-          await this.run(`
-              INSERT INTO query_instances (query_id, session_id, params, query_plan, plan_time, exec_time)
-              VALUES (?, ?, ?, ?, ?, ?)
-          `, [query_id, sessionId, params, queryPlan, planTime, execTime]);
-
+        // Insert the query instance
+        await this.run(`
+            INSERT INTO query_instances (query_id, session_id, params, query_plan, plan_time, exec_time)
+            VALUES (?, ?, ?, ?, ?, ?)
+        `, [query_id, sessionId, params, queryPlan, planTime, execTime]);
     }
 
-    async getQueryGroups({orderBy, orderDirection, queryId}: { orderBy: string, orderDirection: string, queryId?: number}): Promise<any> {
+    async getQueryGroups({orderBy, orderDirection, queryId, host, database, port}: { orderBy: string, orderDirection: string, queryId?: number, host?: string, database?: string, port?: number}): Promise<any> {
         // Handle total_time sorting by calculating it in SQL
         const actualOrderBy = orderBy === 'total_time' ? '(avg_exec_time * num_instances)' : `qs.${orderBy}`;
         
+        const filters: string[] = [];
+        const params: any[] = [];
+
+        if(host !== undefined) {
+            filters.push('q.host = ?');
+            params.push(host);
+        }
+        if(database !== undefined) {
+            filters.push('q.database = ?');
+            params.push(database);
+        }
+        if(port !== undefined) {
+            filters.push('q.port = ?');
+            params.push(port);
+        }
+
+        let filterSql = '';
+        if(filters.length > 0) {
+            filterSql = 'WHERE ' + filters.join(' AND ');
+        }
+
+        // Handle improvement ratio ordering by calculating it in SQL
+        const improvementOrderBy = orderBy === 'prev_exec_time/new_exec_time' 
+            ? 'CASE WHEN qs.prev_exec_time IS NOT NULL AND qs.new_exec_time IS NOT NULL THEN (qs.prev_exec_time / qs.new_exec_time) ELSE NULL END'
+            : actualOrderBy;
+
         let results: QueryGroup[] = await this.all(`
 WITH query_stats AS (
   SELECT
     q.query_id,
     q.query,
+    q.host,
+    q.database,
+    q.port,
     q.llm_response,
     q.suggested_indexes,
     q.applied_indexes,
@@ -171,23 +217,16 @@ WITH query_stats AS (
     queries q
   JOIN
     query_instances qi ON q.query_id = qi.query_id
+  ${filters.length > 0 ? filterSql : ''}
   GROUP BY
-    q.query_id, q.query, q.llm_response, q.suggested_indexes, q.applied_indexes, q.prev_exec_time, q.new_exec_time
-),
-max_exec_query AS (
-  SELECT
-    query_id,
-    query,
-    max_exec_time
-  FROM
-    query_stats
-  ORDER BY
-    max_exec_time DESC
-  LIMIT 1
+    q.query_id, q.query, q.host, q.database, q.port, q.llm_response, q.suggested_indexes, q.applied_indexes, q.prev_exec_time, q.new_exec_time
 )
 SELECT
   qs.query_id,
   qs.query,
+  qs.host,
+  qs.database,
+  qs.port,
   qs.max_exec_time,
   qs.min_exec_time,
   qs.avg_exec_time,
@@ -196,20 +235,15 @@ SELECT
   qs.llm_response,
   qs.suggested_indexes,
   qs.applied_indexes,
-  qs.num_instances
+  qs.num_instances,
+  (qs.avg_exec_time * qs.num_instances) AS total_time,
+  CASE WHEN qs.prev_exec_time IS NOT NULL AND qs.new_exec_time IS NOT NULL THEN (qs.prev_exec_time / qs.new_exec_time) ELSE NULL END AS improvement_ratio
 FROM
   query_stats qs
-LEFT JOIN
-  max_exec_query meq ON qs.query_id = meq.query_id
-LEFT JOIN
-  query_instances qi ON qs.query_id = qi.query_id AND qs.max_exec_time = qi.exec_time
-${queryId || orderBy == 'prev_exec_time/new_exec_time' ? 'WHERE' : ''}
-${queryId ? ' qs.query_id = ?' : ''}
-${queryId && orderBy == 'prev_exec_time/new_exec_time' ? ' AND' : ''}
-${orderBy == 'prev_exec_time/new_exec_time' ? ' qs.prev_exec_time IS NOT NULL' : ''}
+${queryId ? 'WHERE qs.query_id = ?' : ''}
 ORDER BY
-  ${actualOrderBy} ${orderDirection};
-        `, queryId ? [queryId] : []);
+  ${improvementOrderBy} ${orderDirection === 'desc' ? 'DESC NULLS LAST' : 'ASC NULLS LAST'}${orderBy === 'prev_exec_time/new_exec_time' ? ', (qs.avg_exec_time * qs.num_instances) DESC' : ''};
+        `, [...params, ...(queryId ? [queryId] : [])]);
 
         const query_ids = results.map(result => result.query_id);
         const query = `

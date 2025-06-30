@@ -403,15 +403,7 @@ const listener = net.createServer((rawClient) => {
     };
     
     // Use both 'data' and 'readable' events to catch data
-    rawClient.on('data', handleFirstData);
-    rawClient.on('readable', () => {
-        if (hasReceivedData) return;
-        const chunk = rawClient.read();
-        if (chunk) {
-            console.log('[proxy] Got data via readable event');
-            handleFirstData(chunk);
-        }
-    });
+    const chunk = rawClient.read(0);  // just triggers the 'readable', no drain
     
     // Add a timeout as fallback
     const timeout = setTimeout(() => {
