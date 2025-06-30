@@ -22,6 +22,7 @@ import path from 'path'
 import express from "express";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
+import { Client } from 'pg';
 
 // app specific imports
 import args from "server/args";
@@ -60,7 +61,25 @@ const port = args.port;
 const mode = 'production';
 const ssr_enabled = args.ssr;
 
+// Test initial database connectivity and log the outcome
+async function testDbConnection(connectionString: string) {
+  const client = new Client({ connectionString });
+  try {
+    await client.connect();
+    await client.query('SELECT 1');
+    console.log(`✅ Successfully connected to database: ${connectionString}`);
+  } catch (error) {
+    console.error(`❌ Failed to connect to database: ${connectionString}`);
+    console.error(error);
+  } finally {
+    try { await client.end(); } catch (_) { /* ignore */ }
+  }
+}
+
 async function createServer() {
+  // Quickly verify database connectivity before starting the web server
+  await testDbConnection(args.db);
+
   const app = express()
 
   const http_server = http.createServer(app);

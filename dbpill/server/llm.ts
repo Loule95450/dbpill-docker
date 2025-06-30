@@ -1,10 +1,45 @@
-import Anthropic from '@anthropic-ai/sdk';
-import axios from 'axios';
+import OpenAI from 'openai';
 
 import argv from './args';
+import { ConfigManager } from './config_manager';
 
-function getCredentials(service: string, key: string): string {
-    return argv['llm-api-key'] || argv.llmApiKey;
+// Map logical endpoint identifiers to their corresponding OpenAI-compatible base URLs
+function resolveBaseURL(endpoint: string): string {
+    switch (endpoint) {
+        case 'anthropic':
+            // Anthropic OpenAI-compat layer
+            return 'https://api.anthropic.com/v1/';
+        case 'gemini':
+            // Google Gemini compat endpoint
+            return 'https://generativelanguage.googleapis.com/v1beta/openai/';
+        case 'grok':
+            // xAI Grok compat endpoint
+            return 'https://api.x.ai/v1/';
+        case 'openai':
+            // Native OpenAI
+            return 'https://api.openai.com/v1/';
+        default:
+            // Assume custom URL already contains protocol
+            return endpoint;
+    }
+}
+
+let configManager: ConfigManager | null = null;
+
+async function getConfigManager(): Promise<ConfigManager> {
+    if (!configManager) {
+        configManager = new ConfigManager('dbpill.sqlite.db');
+        await configManager.initialize();
+    }
+    return configManager;
+}
+
+async function getCredentials(service: string, key: string): Promise<string> {
+    const cm = await getConfigManager();
+    const config = await cm.getConfig();
+    
+    // Prefer config database, fall back to CLI args
+    return config.llm_api_key || argv['llm-api-key'] || argv.llmApiKey;
 }
 
 export interface Completion {
@@ -14,9 +49,11 @@ export interface Completion {
     stopSequence: string | undefined;
 }
 
-export async function prompt_claude({
+export async function prompt_llm({
     prompt,
-    temperature=0.0,
+    // Temperature is accepted for API compatibility but deliberately ignored
+    // because certain models (e.g. o3) only support the default value (1).
+    temperature: _ignoredTemperature,
     stop,
     streamHandler,
 }: {
@@ -26,91 +63,94 @@ export async function prompt_claude({
     streamHandler?: (stream: any, text: string, stopSequence?: string) => void
 }): Promise<Completion> {
 
-    const messages: Anthropic.MessageParam[] = [{
-        role: 'user',
-        content: prompt,
-    
-    }]
+    const cm = await getConfigManager();
+    const config = await cm.getConfig();
 
-    const API_KEY = getCredentials("anthropic", "api_key");
-    const anthropic = new Anthropic({
+    const endpoint = config.llm_endpoint || 'anthropic';
+    const baseURL = resolveBaseURL(endpoint);
+    const model = config.llm_model || argv['llm-model'] || argv.llmModel || 'claude-sonnet-4-20250514';
+
+    const API_KEY = await getCredentials(endpoint, 'api_key');
+
+    const openai = new OpenAI({
         apiKey: API_KEY,
+        baseURL,
     });
 
-    const stream = await anthropic.messages.create({
-        messages,
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 4096,
-        stream: true,
-        temperature,
-        stop_sequences: stop,
-    })
+    // Some models (e.g. o3) reject the legacy `max_tokens` parameter in favour of
+    // `max_completion_tokens`. We optimistically try the standard `max_tokens`
+    // call first, then *silently* retry once with `max_completion_tokens` if the
+    // API responds with the specific "Unsupported parameter: 'max_tokens'" error.
+    let stream: any;
+    try {
+        stream = await openai.chat.completions.create({
+            model,
+            messages: [{ role: 'user', content: prompt }],
+            max_tokens: 4096,
+            temperature: 1,
+            stop,
+            stream: true,
+        } as any);
+    } catch (err: any) {
+        const msg: string | undefined = err?.message || err?.error?.message;
+        const shouldRetry = msg && msg.includes('max_completion_tokens');
 
-    /* notes from claude api docs
+        if (shouldRetry) {
+            // Retry once with the new parameter. We purposefully avoid logging
+            // the first failure so that consumers do not see a spurious error.
+            stream = await openai.chat.completions.create({
+                model,
+                messages: [{ role: 'user', content: prompt }],
+                // The OpenAI client typings may not include this yet, so we cast
+                // to any to bypass TS restrictions.
+                max_completion_tokens: 4096,
+                temperature: 1,
+                stop,
+                stream: true,
+            } as any);
+        } else {
+            throw err; // Different error – propagate as before
+        }
+    }
 
-    event: message_start
-    data: {"type": "message_start", "message": {"id": "msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY", "type": "message", "role": "assistant", "content": [], "model": "claude-3-opus-20240229, "stop_reason": null, "stop_sequence": null, "usage": {"input_tokens": 25, "output_tokens": 1}}}
-
-    event: content_block_start
-    data: {"type": "content_block_start", "index":0, "content_block": {"type": "text", "text": ""}}
-
-    event: ping
-    data: {"type": "ping"}
-
-    event: content_block_delta
-    data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "Hello"}}
-
-    event: content_block_delta
-    data: {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "!"}}
-
-    event: content_block_stop
-    data: {"type": "content_block_stop", "index": 0}
-
-    event: message_delta
-    data: {"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence":null}, "usage":{"output_tokens": 15}}
-
-    event: message_stop
-    data: {"type": "message_stop"}
-
-
-    */
-
-    let input_tokens = 0;
-    let output_tokens = 0;
     let text = '';
     let stopSequence: string | undefined;
 
-    for await (const messageStreamEvent of stream) {
-        const { type } = messageStreamEvent;
-        // console.log(messageStreamEvent);
-        let text_delta = '';
+    for await (const chunk of stream) {
+        // Different providers surface streaming deltas differently.
+        //  - OpenAI-compatible:   chunk.choices[0].delta.content
+        //  - Anthropic:          chunk.content OR chunk.completion
+        //  - Others (e.g. o3):   may vary but generally expose `.content` too.
 
-        if (type === 'message_start') {
-            text_delta = messageStreamEvent.message.content.join('\n');
-            text += text_delta;
-            input_tokens += messageStreamEvent.message.usage.input_tokens;
-            output_tokens += messageStreamEvent.message.usage.output_tokens;
-        } else if (type === 'content_block_delta') {
-            //@ts-ignore
-            text_delta = messageStreamEvent.delta.text;
-            text += text_delta;
-        } else if (type === 'message_delta') {
-            output_tokens += messageStreamEvent.usage.output_tokens;
-            if (messageStreamEvent.delta.stop_reason === 'stop_sequence') {
-                // console.log('stop sequence', messageStreamEvent.delta.stop_sequence);
-                stopSequence = messageStreamEvent.delta.stop_sequence || undefined;
-            }
-        } else if (type === 'content_block_start') {
-            //@ts-ignore
-            text_delta = messageStreamEvent.content_block.text;
-            text += text_delta;
-            const content_type = messageStreamEvent.content_block.type;
+        const choice = (chunk as any)?.choices?.[0];
+
+        const delta: string =
+            choice?.delta?.content ??
+            (chunk as any)?.content ??
+            (chunk as any)?.completion ??
+            '';
+
+        text += delta;
+
+        // Capture finish/stop information if present.
+        const finishReason: string | undefined =
+            choice?.finish_reason ??
+            (chunk as any)?.stop_reason ??
+            (chunk as any)?.finish_reason;
+
+        if (finishReason && !stopSequence) {
+            stopSequence = finishReason;
         }
 
-        if (streamHandler && (text_delta || stopSequence)) {
-            streamHandler(stream, text_delta, stopSequence);
-            // process.stdout.write(text_delta);
+        if (streamHandler && (delta || stopSequence)) {
+            streamHandler(stream, delta, stopSequence);
         }
     }
-    return { text, input_tokens, output_tokens, stopSequence } as Completion;
+
+    return {
+        text,
+        input_tokens: 0,
+        output_tokens: 0,
+        stopSequence,
+    } as Completion;
 };

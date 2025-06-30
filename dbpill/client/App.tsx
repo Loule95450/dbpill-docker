@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useContext } from 'react';
 import {
   BrowserRouter as Router,
   Routes,
@@ -12,9 +12,9 @@ import './App.css';
 
 import { Home } from './components/Home';
 import { QueryList } from './components/QueryList';
+import { Configs } from './components/Configs';
 
-
-import { AppContext } from './context/AppContext';
+import { AppContext, AppProvider } from './context/AppContext';
 import { MainProps } from 'shared/main_props';
 
 /* -------------------------------------------------------------------------- */
@@ -69,7 +69,25 @@ const NavBar = styled.div`
 const DbInfo = styled.div`
   margin-left: auto;
   font-size: 14px;
-  opacity: 0.8;
+`;
+
+const InfoTable = styled.table`
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+  border-collapse: collapse;
+
+  th, td {
+    padding: 2px 6px;
+  }
+
+  th {
+    opacity: 0.5;
+  }
+
+  th:first-child, td:first-child {
+    text-align: right;
+    font-weight: 600;
+  }
 `;
 
 const StyledNavLink = styled(RouterNavLink)`
@@ -96,6 +114,72 @@ const MainContent = styled.div`
 
 /* -------------------------------------------------------------------------- */
 
+function NavBarContent({ args }: { args: MainProps['args'] }) {
+  const { config } = useContext(AppContext);
+
+  return (
+    <>
+      <TextLogo>dbpill</TextLogo>
+      {/* RouterNavLink automatically adds the `active` class */}
+      <StyledNavLink to="/" end>
+        Instructions
+      </StyledNavLink>
+      <StyledNavLink to="/queries">Queries</StyledNavLink>
+      <StyledNavLink to="/config">Config</StyledNavLink>
+
+      {/* Show current DB connection info and LLM info */}
+      {(() => {
+        try {
+          const dbUrl = new URL(args.db);
+          const host = dbUrl.hostname;
+          const port = dbUrl.port || '5432';
+          const dbName = dbUrl.pathname.replace(/^\/+/, '');
+          const proxyPort = args['proxy-port'] || args.proxyPort || 5433;
+          
+          // Get LLM info - prioritize config over CLI args
+          const llmEndpoint = config?.llm_endpoint || args['llm-endpoint'] || args.llmEndpoint || 'anthropic';
+          const llmModel = config?.llm_model || args['llm-model'] || args.llmModel || 'claude-sonnet-4';
+          
+          // Format LLM provider name for display
+          let llmProvider = llmEndpoint;
+          if (llmEndpoint === 'anthropic') {
+            llmProvider = 'Anthropic';
+          } else if (llmEndpoint === 'openai') {
+            llmProvider = 'OpenAI';
+          } else if (llmEndpoint.startsWith('http')) {
+            // Custom URL - extract domain for display
+            try {
+              const url = new URL(llmEndpoint);
+              llmProvider = url.hostname;
+            } catch {
+              llmProvider = 'Custom';
+            }
+          }
+          
+          return (
+            <DbInfo>
+              <InfoTable>
+                <tbody>
+                  <tr>
+                    <th>Proxy</th>
+                    <td style={{color: 'rgba(255, 255, 180, 1)'}}>{`:${proxyPort} → ${host}:${port}/${dbName}`}</td>
+                  </tr>
+                  <tr>
+                    <th>LLM</th>
+                    <td>{`${llmProvider} • ${llmModel}`}</td>
+                  </tr>
+                </tbody>
+              </InfoTable>
+            </DbInfo>
+          );
+        } catch (_) {
+          return null;
+        }
+      })()}
+    </>
+  );
+}
+
 function App({ args }: MainProps) {
   // Establish socket connection (same behaviour as before)
   useEffect(() => {
@@ -110,69 +194,23 @@ function App({ args }: MainProps) {
   }, []);
 
   return (
-    <AppContext.Provider value={{ args }}>
+    <AppProvider args={args}>
       <Router>
         <Container>
           <NavBar>
-            <TextLogo>dbpill</TextLogo>
-            {/* RouterNavLink automatically adds the `active` class */}
-            <StyledNavLink to="/" end>
-              Instructions
-            </StyledNavLink>
-            <StyledNavLink to="/queries">Queries</StyledNavLink>
-
-            {/* Show current DB connection info and LLM info */}
-            {(() => {
-              try {
-                const dbUrl = new URL(args.db);
-                const host = dbUrl.hostname;
-                const port = dbUrl.port || '5432';
-                const dbName = dbUrl.pathname.replace(/^\/+/, '');
-                const proxyPort = args['proxy-port'] || args.proxyPort || 5433;
-                
-                // Get LLM info
-                const llmEndpoint = args['llm-endpoint'] || args.llmEndpoint || 'anthropic';
-                const llmModel = args['llm-model'] || args.llmModel || 'claude-sonnet-4';
-                
-                // Format LLM provider name for display
-                let llmProvider = llmEndpoint;
-                if (llmEndpoint === 'anthropic') {
-                  llmProvider = 'Anthropic';
-                } else if (llmEndpoint === 'openai') {
-                  llmProvider = 'OpenAI';
-                } else if (llmEndpoint.startsWith('http')) {
-                  // Custom URL - extract domain for display
-                  try {
-                    const url = new URL(llmEndpoint);
-                    llmProvider = url.hostname;
-                  } catch {
-                    llmProvider = 'Custom';
-                  }
-                }
-                
-                return (
-                  <DbInfo>
-                    <div>{`:${proxyPort} → ${host}:${port}/${dbName}`}</div>
-                    <div style={{ fontSize: '12px', opacity: 0.7 }}>
-                      {llmProvider} • {llmModel}
-                    </div>
-                  </DbInfo>
-                );
-              } catch (_) {
-                return null;
-              }
-            })()}
+            <NavBarContent args={args} />
           </NavBar>
 
           <MainContent>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/queries" element={<QueryList />} />
+              <Route path="/config" element={<Configs />} />
             </Routes>
           </MainContent>
         </Container>
       </Router>
-    </AppContext.Provider>
+    </AppProvider>
   );
 }
 

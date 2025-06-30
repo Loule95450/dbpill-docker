@@ -5,6 +5,7 @@ import express from "express";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { createServer as createViteServer } from 'vite'
+import { Client } from 'pg';
 
 // app specific imports
 import args from "server/args";
@@ -18,7 +19,25 @@ const ssr_enabled = args.ssr;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
+// Test initial database connectivity and log the outcome
+async function testDbConnection(connectionString: string) {
+  const client = new Client({ connectionString });
+  try {
+    await client.connect();
+    await client.query('SELECT 1');
+    console.log(`✅ Successfully connected to database: ${connectionString}`);
+  } catch (error) {
+    console.error(`❌ Failed to connect to database: ${connectionString}`);
+    console.error(error);
+  } finally {
+    try { await client.end(); } catch (_) { /* ignore */ }
+  }
+}
+
 async function createServer() {
+  // Quickly verify database connectivity before starting the web server
+  await testDbConnection(args.db);
+
   const app = express()
 
   const http_server = http.createServer(app);

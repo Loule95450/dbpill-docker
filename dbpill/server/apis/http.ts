@@ -5,13 +5,15 @@ import nocache from "nocache";
 import express from "express";
 import { getMainProps } from "server/main_props";
 
-import { prompt_claude } from '../llm';
+import { prompt_llm } from '../llm';
 import '../proxy';
 
 import { queryAnalyzer } from '../proxy';
 import { generateSuggestionPrompt } from '../prompt_generator';
+import { ConfigManager } from '../config_manager';
 
 const queryLogger = queryAnalyzer.logger;
+let configManager: ConfigManager | null = null;
 
 // socket.io context can be used to push messages from api routes
 export function setup_routes(app: any, io: any) {
@@ -21,12 +23,49 @@ export function setup_routes(app: any, io: any) {
     app.use(nocache());
     app.use(compression());
 
+    // Initialize ConfigManager
+    const initConfigManager = async () => {
+        if (!configManager) {
+            configManager = new ConfigManager('dbpill.sqlite.db');
+            await configManager.initialize();
+        }
+        return configManager;
+    };
+
     app.get("/api/props", async (req, res) => {
         const top_level_state = await getMainProps(req);
         res.json(top_level_state);
     });
 
+    app.get('/api/config', async (req, res) => {
+        try {
+            const cm = await initConfigManager();
+            const config = await cm.getConfig();
+            res.json(config);
+        } catch (error) {
+            console.error('Error getting config:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
 
+    app.post('/api/config', async (req, res) => {
+        try {
+            const cm = await initConfigManager();
+            const { llm_endpoint, llm_model, llm_api_key } = req.body;
+            
+            await cm.updateConfig({
+                llm_endpoint,
+                llm_model,
+                llm_api_key: llm_api_key || null
+            });
+            
+            const updatedConfig = await cm.getConfig();
+            res.json(updatedConfig);
+        } catch (error) {
+            console.error('Error updating config:', error);
+            res.status(500).json({ error: error.message });
+        }
+    });
 
     app.get('/api/all_queries', async (req, res) => {
         const orderBy = req.query.orderBy as string || 'query_id';
@@ -388,35 +427,39 @@ export function setup_routes(app: any, io: any) {
             appliedIndexes: applied_indexes,
         });
 
-        const response = await prompt_claude({ prompt, temperature: 0 });
+        try {
+            const response = await prompt_llm({ prompt, temperature: 0 });
 
-        // the last ```sql block in the response is the suggested indexes
-        function extractLastCodeBlock(text) {
-            const codeBlockRegex = /```sql[\s\S]*?```/g;
-            const matches = text.match(codeBlockRegex);
-            
-            if (matches && matches.length > 0) {
-                const lastBlock = matches[matches.length - 1];
-                return lastBlock.slice("```sql".length, -("```".length)).trim();
+            // the last ```sql block in the LLM response is treated as the suggested indexes
+            function extractLastCodeBlock(text: string) {
+                const codeBlockRegex = /```sql[\s\S]*?```/g;
+                const matches = text.match(codeBlockRegex);
+                if (matches && matches.length > 0) {
+                    const lastBlock = matches[matches.length - 1];
+                    return lastBlock.slice("```sql".length, -("```".length)).trim();
+                }
+                return null;
             }
-            
-            return null;
+
+            const suggested_indexes = extractLastCodeBlock(response.text) ?? '';
+
+            // save the response to the database
+            await queryAnalyzer.logger.addSuggestion({
+                query_id: parseInt(queryId),
+                llm_response: response.text,
+                suggested_indexes,
+            });
+
+            const newQueryData = await queryLogger.getQueryGroup(parseInt(queryId));
+            // Attach prompt preview so the client can display it (not stored in DB, only sent back now)
+            // @ts-ignore – dynamic property for client convenience
+            newQueryData.prompt_preview = prompt;
+
+            res.json(newQueryData);
+        } catch (error) {
+            console.error('Error getting LLM suggestions:', error);
+            const message = (error as any)?.message || 'Failed to retrieve suggestions from LLM';
+            res.status(500).json({ error: message });
         }
-
-        const suggested_indexes = extractLastCodeBlock(response.text) ?? '';
-
-        // save the response to the database
-        await queryAnalyzer.logger.addSuggestion({
-            query_id: parseInt(queryId),
-            llm_response: response.text,
-            suggested_indexes,
-        });
-        const newQueryData = await queryLogger.getQueryGroup(parseInt(queryId));
-        // Attach prompt preview so the client can display it
-        // (not stored in DB, only sent back in this response)
-        // @ts-ignore
-        newQueryData.prompt_preview = prompt;
-
-        res.json(newQueryData);
     });
 }

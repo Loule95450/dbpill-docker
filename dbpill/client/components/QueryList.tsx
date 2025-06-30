@@ -96,7 +96,13 @@ export function QueryList() {
         'Content-Type': 'application/json',
       },
     })
-      .then((response) => response.json())
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to get AI suggestions');
+        }
+        return data;
+      })
       .then((data) => {
         setStats((prevStats) => {
           const newStats = [...prevStats];
@@ -109,6 +115,9 @@ export function QueryList() {
           }
           return newStats;
         });
+      })
+      .catch((err) => {
+        alert(err.message);
       })
       .finally(() => {
         setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));

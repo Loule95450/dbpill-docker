@@ -54,7 +54,7 @@ const visibleOptions = Object.keys(options.key).filter(key => !hiddenOptions.inc
 
 process.env.NODE_ENV = argv.mode;
 
-console.log('Running with args:');
+console.log('Running with CLI args:');
 for (const key of visibleOptions) {
     const value = argv[key];
     console.log(`  --${key} ${value}`);
