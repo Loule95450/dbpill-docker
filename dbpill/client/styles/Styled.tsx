@@ -50,7 +50,6 @@ export const QueryText = styled.div<{ $expanded?: boolean }>`
   font-size: 13px;
   line-height: 1.4;
   cursor: pointer;
-  font-family: 'Inconsolata', monospace;
   
   ${props => !props.$expanded && `
     max-height: 200px;
@@ -112,7 +111,6 @@ export const RowIndex = styled.span`
 
 export const ActionButton = styled.button<{ $variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'ai-suggestion' }>`
   padding: 6px 10px;
-  font-family: "Inconsolata", monospace;
   font-size: 13px;
   font-weight: 500;
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -124,6 +122,7 @@ export const ActionButton = styled.button<{ $variant?: 'primary' | 'secondary' |
   min-width: 70px;
   transition: all 0.15s ease;
   border-radius: 0;
+  font-family: "Inconsolata", monospace;
   
   ${props => props.$variant === 'primary' && `
     border-color: #6366f1;
@@ -249,7 +248,6 @@ export const PerformanceBadge = styled.div<{ $improvement: number }>`
   line-height: 2em;
   padding: 0 10px;
   border-radius: 5px;
-  font-family: 'Inconsolata', monospace;
   white-space: nowrap;
 
   ${props => props.$improvement > 5.0 && `
@@ -289,7 +287,7 @@ export const QuerySection = styled.div`
   padding: 16px;
   display: flex;
   flex-direction: column;
-  min-height: 200px;
+  min-height: 150px;
 `;
 
 export const QueryContentSection = styled(QuerySection)`
@@ -355,7 +353,6 @@ export const HighlightedSQL = styled.div`
   word-wrap: break-word;
   word-break: break-word;
   overflow-wrap: break-word;
-  font-family: 'Inconsolata', monospace;
 `;
 
 export const Block = styled.div`
@@ -512,13 +509,14 @@ export const QueryDetailsBottomBarSection = styled.div`
   align-items: center;
   padding: 0 10px;
   gap: 5px;
-  font-family: 'Inconsolata', monospace;
   font-size: 11px;
   user-select: none;
 `;
 
 export const QueryDetailsTabButton = styled.button<{ $active?: boolean }>`
   background: none;
+  font-family: "Inconsolata", monospace;
+  font-size: 14px;
   border: none;
   cursor: pointer;
   padding: 0 10px;
@@ -545,7 +543,6 @@ export const QueryDetailsPanel = styled.div`
   margin: 0 10px;
   border-bottom-left-radius: 10px;
   border-bottom-right-radius: 10px;
-  font-family: 'Inconsolata', monospace;
   font-size: 13px;
   line-height: 1.4;
   white-space: pre-wrap;
