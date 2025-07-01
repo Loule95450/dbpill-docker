@@ -1,4 +1,5 @@
 import { createContext, useState, useEffect, ReactNode } from 'react';
+import { configApi } from '../utils/HttpApi';
 
 interface LLMConfig {
   id: number;
@@ -12,13 +13,13 @@ interface LLMConfig {
 export interface AppContextShape {
   args: any;
   config: LLMConfig | null;
-  updateConfig: (newConfig: Partial<LLMConfig>) => Promise<void>;
+  updateConfig: (newConfig: Partial<LLMConfig>) => Promise<LLMConfig>;
 }
 
 export const AppContext = createContext<AppContextShape>({ 
   args: {}, 
   config: null,
-  updateConfig: async () => {}
+  updateConfig: async () => ({} as LLMConfig)
 });
 
 export function AppProvider({ children, args }: { children: ReactNode; args: any }) {
@@ -26,8 +27,7 @@ export function AppProvider({ children, args }: { children: ReactNode; args: any
 
   const loadConfig = async () => {
     try {
-      const response = await fetch('/api/config');
-      const data = await response.json();
+      const data = await configApi.getConfig();
       setConfig(data);
     } catch (error) {
       console.error('Error loading config:', error);
@@ -36,19 +36,7 @@ export function AppProvider({ children, args }: { children: ReactNode; args: any
 
   const updateConfig = async (newConfig: Partial<LLMConfig>) => {
     try {
-      const response = await fetch('/api/config', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newConfig),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update configuration');
-      }
-
-      const updatedConfig = await response.json();
+      const updatedConfig = await configApi.updateConfig(newConfig);
       setConfig(updatedConfig);
       return updatedConfig;
     } catch (error) {

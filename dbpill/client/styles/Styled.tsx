@@ -547,3 +547,7 @@ export const QueryDetailsPanel = styled.div`
   line-height: 1.4;
   white-space: pre-wrap;
 `;
+
+export const ExpandArrow = styled.span`
+  color: rgba(255, 255, 255, 0.3);
+`;

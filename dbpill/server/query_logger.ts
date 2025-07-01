@@ -295,6 +295,24 @@ ORDER BY
         `, [queryId]);
     }
 
+    async getSlowestQueryInstance(queryId: number): Promise<any | null> {
+        return this.get(`
+            SELECT * FROM query_instances WHERE query_id = ? ORDER BY exec_time DESC LIMIT 1
+        `, [queryId]);
+    }
+
+    async getFastestQueryInstance(queryId: number): Promise<any | null> {
+        return this.get(`
+            SELECT * FROM query_instances WHERE query_id = ? ORDER BY exec_time ASC LIMIT 1
+        `, [queryId]);
+    }
+
+    async getLatestQueryInstance(queryId: number): Promise<any | null> {
+        return this.get(`
+            SELECT * FROM query_instances WHERE query_id = ? ORDER BY timestamp DESC LIMIT 1
+        `, [queryId]);
+    }
+
     async getQueryStats(queryId: number): Promise<any> {
         return this.get(`
             SELECT q.query_id, q.query, qi.*, q.llm_response, q.suggested_indexes, q.applied_indexes

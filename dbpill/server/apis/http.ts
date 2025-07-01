@@ -82,6 +82,7 @@ export function setup_routes(app: any, io: any) {
 
     app.get('/api/query/:query_id', async (req, res) => {
         const queryId = req.params.query_id as string;
+        const instanceType = req.query.instance_type as string | undefined;
         const queryData = await queryLogger.getQueryGroup(parseInt(queryId));
 
         if (!queryData) {
@@ -93,13 +94,21 @@ export function setup_routes(app: any, io: any) {
         // so that the frontend can show it without the user having to rerun the suggestion flow.
         if (queryData.llm_response) {
             try {
-                // Use the most recent instance so that the prompt preview is consistent with the stored response
-                const instances = await queryLogger.getQueryInstances(parseInt(queryId));
-                if (instances.length > 0) {
-                    const latestInstance = instances[instances.length - 1];
+                // Get the appropriate instance based on the instance_type parameter
+                let selectedInstance: any = null;
+                if (instanceType === 'slowest') {
+                    selectedInstance = await queryLogger.getSlowestQueryInstance(parseInt(queryId));
+                } else if (instanceType === 'fastest') {
+                    selectedInstance = await queryLogger.getFastestQueryInstance(parseInt(queryId));
+                } else {
+                    // Default to latest for backwards compatibility
+                    selectedInstance = await queryLogger.getLatestQueryInstance(parseInt(queryId));
+                }
+                
+                if (selectedInstance) {
                     let planJson: any = null;
                     try {
-                        planJson = JSON.parse(latestInstance.query_plan);
+                        planJson = JSON.parse(selectedInstance.query_plan);
                     } catch (_) {
                         planJson = null;
                     }
@@ -142,9 +151,22 @@ export function setup_routes(app: any, io: any) {
                         queryData.prompt_preview = prompt;
                     }
                 }
+                // Attach the selected instance for UI convenience
+                // @ts-ignore
+                queryData.selected_instance = selectedInstance;
             } catch (err) {
                 console.error('Error generating prompt preview:', err);
             }
+        } else {
+            // Even if there's no LLM response, we still want to attach the selected instance
+            const selectedInstance = instanceType === 'slowest' 
+                ? await queryLogger.getSlowestQueryInstance(parseInt(queryId))
+                : instanceType === 'fastest'
+                ? await queryLogger.getFastestQueryInstance(parseInt(queryId))
+                : await queryLogger.getLatestQueryInstance(parseInt(queryId));
+            
+            // @ts-ignore
+            queryData.selected_instance = selectedInstance;
         }
 
         res.json(queryData);
@@ -153,9 +175,12 @@ export function setup_routes(app: any, io: any) {
     app.get('/api/analyze_query', async (req, res) => {
         const queryId = req.query.query_id as string;
         const queryData = await queryLogger.getQueryGroup(parseInt(queryId));
-        const instances = await queryLogger.getQueryInstances(parseInt(queryId));
+        const slowest_instance = await queryLogger.getSlowestQueryInstance(parseInt(queryId));
 
-        const slowest_instance = instances.reduce((prev, current) => (prev.exec_time > current.exec_time) ? prev : current);
+        if (!slowest_instance) {
+            res.status(404).json({ error: 'No query instances found' });
+            return;
+        }
 
         const params = JSON.parse(slowest_instance.params);
         const analysis = await queryAnalyzer.analyze({query: queryData.query, params});
@@ -197,12 +222,11 @@ export function setup_routes(app: any, io: any) {
         const stats = await queryLogger.getQueryGroup(parseInt(queryId));
         const suggested_indexes = stats.suggested_indexes;
 
-        const instances = await queryLogger.getQueryInstances(parseInt(queryId));
-        if(instances.length ==0) {
+        const slowest_instance = await queryLogger.getSlowestQueryInstance(parseInt(queryId));
+        if(!slowest_instance) {
             res.json(stats);
             return;
         }
-        const slowest_instance = instances.sort((a, b) => b.exec_time - a.exec_time)[0];
         const params = JSON.parse(slowest_instance.params);
 
 
@@ -334,13 +358,11 @@ export function setup_routes(app: any, io: any) {
         }
 
         // Get latest instance to extract plan
-        const instances = await queryLogger.getQueryInstances(parseInt(queryId));
-        if (instances.length === 0) {
+        const latestInstance = await queryLogger.getLatestQueryInstance(parseInt(queryId));
+        if (!latestInstance) {
             res.json({});
             return;
         }
-
-        const latestInstance = instances[0];
         let planJson: any = null;
         try {
             planJson = JSON.parse(latestInstance.query_plan);
@@ -389,12 +411,19 @@ export function setup_routes(app: any, io: any) {
         res.json(result);
     });
 
-    app.get('/api/suggest', async (req, res) => {
-        const queryId = req.query.query_id as string;
+    // Suggest indexes – optionally accept a custom prompt from the client
+    // If the client provides a prompt (req.body.prompt), we use that directly.
+    // Otherwise, we generate the prompt server-side as before. Switch to POST so
+    // the potentially large prompt can be sent in the request body.
+    app.post('/api/suggest', async (req, res) => {
+        // For backward compatibility, we still honour the query string, but the
+        // recommended way is to send JSON { query_id, prompt } in the request body.
+        const queryId = (req.body.query_id as string) || (req.query.query_id as string);
+        const customPrompt = (req.body.prompt as string) || (req.query.prompt as string);
         const stats = await queryLogger.getQueryGroup(parseInt(queryId));
-        const instances = await queryLogger.getQueryInstances(parseInt(queryId));
+        const slowestInstance = await queryLogger.getSlowestQueryInstance(parseInt(queryId));
 
-        if(instances.length == 0) {
+        if(!slowestInstance) {
             res.json(stats);
             return;
         }
@@ -423,14 +452,15 @@ export function setup_routes(app: any, io: any) {
             return [...new Set(relationNames)];
           }
 
-        const queryPlan = JSON.parse(instances[instances.length - 1].query_plan);
+        const queryPlan = JSON.parse(slowestInstance.query_plan);
         const tables = extractRelationNames(queryPlan);
 
         const table_defs = await Promise.all(tables.map(table => queryAnalyzer.getTableStructure(table)));
 
         const applied_indexes = stats.applied_indexes;
 
-        const prompt = generateSuggestionPrompt({
+        // Determine which prompt to send to the LLM.
+        const prompt = customPrompt && customPrompt.trim().length > 0 ? customPrompt : generateSuggestionPrompt({
             queryText: stats.query,
             queryPlanJson: queryPlan,
             tableDefinitions: table_defs,

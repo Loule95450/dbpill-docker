@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import { queryApi } from '../utils/HttpApi';
 import {
   QueryDetailsBottomBar,
   QueryDetailsBottomBarSection,
@@ -14,6 +15,7 @@ import {
   StatsTableValueCell,
   StatsTableActionCell,
   StatsTableHeaderCell,
+  ExpandArrow,
 } from '../styles/Styled';
 import { formatNumber } from '../utils/formatNumber';
 
@@ -34,30 +36,77 @@ export function QueryDetailsBar({
   const [queryDetails, setQueryDetails] = useState<any>(null);
   const [relevantTables, setRelevantTables] = useState<any>(null);
   const [runningInstances, setRunningInstances] = useState<{ [key: string]: boolean }>({});
+  const [instanceType, setInstanceType] = useState<'slowest' | 'fastest' | 'latest'>('latest');
+
+  // Prompt editing state
+  const [isEditingPrompt, setIsEditingPrompt] = useState<boolean>(false);
+  const [editedPrompt, setEditedPrompt] = useState<string>('');
+  const [hasEditedPrompt, setHasEditedPrompt] = useState<boolean>(false);
+
+  // Copy prompt UI feedback
+  const [copiedPrompt, setCopiedPrompt] = useState<boolean>(false);
+
+  // Reset edited state when queryId changes
+  useEffect(() => {
+    setHasEditedPrompt(false);
+    setIsEditingPrompt(false);
+  }, [queryId]);
+
+  // Whenever queryDetails change, reset editedPrompt
+  useEffect(() => {
+    if (queryDetails?.prompt_preview && !isEditingPrompt && !hasEditedPrompt) {
+      setEditedPrompt(queryDetails.prompt_preview);
+    }
+  }, [queryDetails, isEditingPrompt, hasEditedPrompt]);
 
   const fetchQueryDetails = async (forceRefresh = false) => {
     if (queryDetails && !forceRefresh) return; // already fetched
-    const res = await fetch(`/api/query/${queryId}`);
-    const data = await res.json();
-    setQueryDetails(data);
+    try {
+      const data = await queryApi.getQuery(queryId, instanceType);
+      // Preserve edited prompt if it exists
+      if (hasEditedPrompt && editedPrompt) {
+        data.prompt_preview = editedPrompt;
+      }
+      setQueryDetails(data);
+    } catch (error) {
+      console.error('Error fetching query details:', error);
+    }
   };
 
-  const fetchTablesInfo = async () => {
-    if (relevantTables) return;
-    const res = await fetch(`/api/relevant_tables?query_id=${queryId}`);
-    const data = await res.json();
-    setRelevantTables(data);
+  const fetchTablesInfo = async (forceRefresh = false) => {
+    if (relevantTables && !forceRefresh) return;
+    try {
+      const data = await queryApi.getRelevantTables(queryId);
+      setRelevantTables(data);
+    } catch (error) {
+      console.error('Error fetching tables info:', error);
+    }
   };
 
   const handleTabClick = (tabId: string) => {
-    setActiveTab(activeTab === tabId ? null : tabId);
+    const isClosing = activeTab === tabId;
+    setActiveTab(isClosing ? null : tabId);
     
-    // Fetch data based on tab type
-    if (tabId.startsWith('query') || tabId.startsWith('stats') || tabId.startsWith('ai')) {
-      fetchQueryDetails();
-    }
-    if (tabId === 'query-tables') {
-      fetchTablesInfo();
+    if (isClosing) {
+      // Clear cached data when closing tabs, but preserve AI-related data if prompt was edited
+      if (!hasEditedPrompt || (!tabId.startsWith('ai'))) {
+        setQueryDetails(null);
+      }
+      setRelevantTables(null);
+    } else {
+      // Force refresh when opening tabs, but not for AI tabs if prompt was edited
+      if (tabId.startsWith('query') || tabId.startsWith('stats')) {
+        fetchQueryDetails(true); // Force refresh
+      } else if (tabId.startsWith('ai')) {
+        if (!hasEditedPrompt) {
+          fetchQueryDetails(true); // Only force refresh if no edits
+        } else {
+          fetchQueryDetails(false); // Use cached data if we have edits
+        }
+      }
+             if (tabId === 'query-tables') {
+         fetchTablesInfo(true); // Force refresh
+       }
     }
   };
 
@@ -66,8 +115,7 @@ export function QueryDetailsBar({
     setRunningInstances(prev => ({ ...prev, [key]: true }));
     
     try {
-      const response = await fetch(`/api/analyze_query_with_params?query_id=${queryId}&params=${encodeURIComponent(params)}`);
-      const data = await response.json();
+      const data = await queryApi.analyzeQueryWithParams(queryId, params);
       
       setStats(prevStats => {
         const newStats = [...prevStats];
@@ -85,6 +133,31 @@ export function QueryDetailsBar({
     }
   };
 
+  const handleInstanceTypeChange = (newType: 'slowest' | 'fastest' | 'latest') => {
+    setInstanceType(newType);
+  };
+
+  // Add a helper to copy the current prompt/text to clipboard
+  const handleCopyPrompt = () => {
+    const promptText = isEditingPrompt ? editedPrompt : (queryDetails?.prompt_preview ?? '');
+    if (promptText) {
+      navigator.clipboard.writeText(promptText).then(() => {
+        setCopiedPrompt(true);
+        setTimeout(() => setCopiedPrompt(false), 2000);
+      }).catch(err => {
+        console.error('Failed to copy prompt:', err);
+      });
+    }
+  };
+
+  // Refetch query details whenever the instanceType changes and the Query Plan tab is active
+  useEffect(() => {
+    if (activeTab === 'query-plan') {
+      fetchQueryDetails(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instanceType]);
+
   return (
     <>
       <QueryDetailsBottomBar>
@@ -94,13 +167,13 @@ export function QueryDetailsBar({
             $active={activeTab === 'query-plan'}
             onClick={() => handleTabClick('query-plan')}
           >
-            Query plan
+            <ExpandArrow>{activeTab === 'query-plan' ? '-' : '+'}</ExpandArrow> Query plan
           </QueryDetailsTabButton>
           <QueryDetailsTabButton
             $active={activeTab === 'query-tables'}
             onClick={() => handleTabClick('query-tables')}
           >
-            Tables
+            <ExpandArrow>{activeTab === 'query-tables' ? '-' : '+'}</ExpandArrow> Tables
           </QueryDetailsTabButton>
         </QueryDetailsBottomBarSection>
 
@@ -110,7 +183,7 @@ export function QueryDetailsBar({
             $active={activeTab === 'stats-runs'}
             onClick={() => handleTabClick('stats-runs')}
           >
-            Individual runs
+            <ExpandArrow>{activeTab === 'stats-runs' ? '-' : '+'}</ExpandArrow> Individual runs
           </QueryDetailsTabButton>
         </QueryDetailsBottomBarSection>
 
@@ -121,14 +194,14 @@ export function QueryDetailsBar({
             $active={activeTab === 'ai-prompt'}
             onClick={() => handleTabClick('ai-prompt')}
           >
-            Prompt
+            <ExpandArrow>{activeTab === 'ai-prompt' ? '-' : '+'}</ExpandArrow> Prompt
           </QueryDetailsTabButton>
           <QueryDetailsTabButton
             disabled={!hasLlmResponse}
             $active={activeTab === 'ai-response'}
             onClick={() => handleTabClick('ai-response')}
           >
-            Full AI response
+            <ExpandArrow>{activeTab === 'ai-response' ? '-' : '+'}</ExpandArrow> Full AI response
           </QueryDetailsTabButton>
         </QueryDetailsBottomBarSection>
       </QueryDetailsBottomBar>
@@ -136,7 +209,27 @@ export function QueryDetailsBar({
       {activeTab && (
         <QueryDetailsPanel>
           {activeTab === 'query-plan' && (
-            <pre>{queryDetails?.instances?.[0]?.query_plan ?? 'Loading...'}</pre>
+            <div>
+              <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <span style={{ fontWeight: 'bold' }}>Instance type:</span>
+                <select 
+                  value={instanceType} 
+                  onChange={(e) => handleInstanceTypeChange(e.target.value as 'slowest' | 'fastest' | 'latest')}
+                  style={{ 
+                    padding: '4px 8px', 
+                    borderRadius: '4px', 
+                    border: '1px solid #333',
+                    backgroundColor: '#1a1a1a',
+                    color: 'white'
+                  }}
+                >
+                  <option value="latest">Latest</option>
+                  <option value="slowest">Slowest</option>
+                  <option value="fastest">Fastest</option>
+                </select>
+              </div>
+              <pre>{queryDetails?.selected_instance?.query_plan ?? 'Loading...'}</pre>
+            </div>
           )}
 
           {activeTab === 'query-tables' && (
@@ -206,12 +299,12 @@ export function QueryDetailsBar({
                                 $variant="secondary"
                                 onClick={() => handleInstanceRerun(inst.instance_id, inst.params)}
                                 disabled={runningInstances[instanceKey]}
-                                style={{ fontSize: '10px', padding: '4px 8px', minWidth: '60px' }}
+                                style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', padding: '4px 8px', minWidth: '60px' }}
                               >
                                 {runningInstances[instanceKey] ? (
                                   <LoadingIndicator>Running...</LoadingIndicator>
                                 ) : (
-                                  '↻ Run'
+                                  '↻ Run again'
                                 )}
                               </ActionButton>
                             </StatsTableActionCell>
@@ -228,7 +321,89 @@ export function QueryDetailsBar({
           )}
 
           {activeTab === 'ai-prompt' && (
-            <pre style={{ whiteSpace: 'pre-wrap' }}>{queryDetails?.prompt_preview ?? 'No prompt'}</pre>
+            <div style={{ position: 'relative', width: '100%' }}>
+              {/* Toggle edit button */}
+              <h2>
+                Prompt for AI suggestions
+                {hasEditedPrompt && <span style={{ color: '#ff9500', fontSize: '0.8em', marginLeft: '8px' }}>(edited)</span>}
+              </h2>
+              <div style={{ position: 'absolute', top: 0, right: 0, display: 'flex', gap: '8px' }}>
+                {hasEditedPrompt && (
+                  <ActionButton
+                    $variant="secondary"
+                    style={{ padding: '4px 8px' }}
+                    onClick={async () => {
+                      setHasEditedPrompt(false);
+                      // Fetch fresh data from server to get original prompt
+                      try {
+                        const originalData = await queryApi.getQuery(queryId, instanceType);
+                        setEditedPrompt(originalData.prompt_preview || '');
+                        setQueryDetails(originalData);
+                        // Reset in parent stats too
+                        setStats(prevStats => {
+                          const newStats = [...prevStats];
+                          const idx = newStats.findIndex(s => s.query_id === parseInt(queryId));
+                          if (idx !== -1) newStats[idx] = { ...newStats[idx], prompt_preview: originalData.prompt_preview || '' };
+                          return newStats;
+                        });
+                      } catch (error) {
+                        console.error('Error fetching original prompt:', error);
+                        // Fallback to cached data
+                        setEditedPrompt(queryDetails?.prompt_preview || '');
+                      }
+                    }}
+                  >
+                    ↩ Reset to original
+                  </ActionButton>
+                )}
+                <ActionButton
+                  $variant="secondary"
+                  style={{ padding: '4px 8px' }}
+                  onClick={handleCopyPrompt}
+                >
+                  {copiedPrompt ? 'Copied!' : '📋 Copy prompt'}
+                </ActionButton>
+                <ActionButton
+                  $variant="secondary"
+                  style={{ padding: '4px 8px' }}
+                  onClick={() => setIsEditingPrompt(prev => !prev)}
+                >
+                  {isEditingPrompt ? 'Done editing' : '✏️ Edit prompt manually'}
+                </ActionButton>
+              </div>
+
+              {isEditingPrompt ? (
+                <textarea
+                  value={editedPrompt}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setEditedPrompt(val);
+                    setHasEditedPrompt(true);
+                    // Update parent stats so QueryList knows about the new prompt
+                    setStats(prevStats => {
+                      const newStats = [...prevStats];
+                      const idx = newStats.findIndex(s => s.query_id === parseInt(queryId));
+                      if (idx !== -1) newStats[idx] = { ...newStats[idx], prompt_preview: val };
+                      return newStats;
+                    });
+                    // Also update local queryDetails for immediate display
+                    setQueryDetails(prev => prev ? { ...prev, prompt_preview: val } : prev);
+                  }}
+                  style={{
+                    width: '100%',
+                    minHeight: '300px',
+                    backgroundColor: '#1a1a1a',
+                    color: 'white',
+                    border: '1px solid #333',
+                    padding: '8px',
+                    borderRadius: '4px',
+                    whiteSpace: 'pre-wrap',
+                  }}
+                />
+              ) : (
+                <pre style={{ whiteSpace: 'pre-wrap' }}>{queryDetails?.prompt_preview ?? 'No prompt'}</pre>
+              )}
+            </div>
           )}
 
           {activeTab === 'ai-response' && (

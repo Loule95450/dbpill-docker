@@ -1,6 +1,8 @@
 import { useState, useEffect, useContext } from 'react';
 import styled from 'styled-components';
 import { AppContext } from '../context/AppContext';
+import { ActionButton, LoadingIndicator } from '../styles/Styled';
+import { adminApi } from '../utils/HttpApi';
 
 /* -------------------------------------------------------------------------- */
 /*                                  Styles                                    */
@@ -127,6 +129,7 @@ const HelpText = styled.span`
 export function Configs() {
   const { config, updateConfig } = useContext(AppContext);
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [formData, setFormData] = useState({
     llm_endpoint: '',
@@ -194,6 +197,22 @@ export function Configs() {
       setCustomUrl('');
     } else if (!customUrl) {
       setCustomUrl('https://');
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm('Are you sure you want to clear all query logs? This action cannot be undone.')) {
+      return;
+    }
+    setResetting(true);
+    try {
+      await adminApi.resetQueryLogs();
+      alert('Query logs have been cleared.');
+    } catch (error: any) {
+      console.error('Error resetting query logs:', error);
+      alert(error.message || 'Failed to reset query logs');
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -298,6 +317,17 @@ export function Configs() {
 
       <Title>Database Configuration</Title>
       <Description>You must configure the database connection string when launching the proxy: <br /><code>./dbpill --db=postgres://user:password@host:port/database</code></Description>
+
+      <Title>Maintenance</Title>
+      <Description>Clear all captured query logs.</Description>
+      <ActionButton
+        $variant="danger"
+        onClick={handleReset}
+        disabled={resetting}
+        style={{ padding: '6px 12px', fontSize: '14px', marginBottom: '40px' }}
+      >
+        {resetting ? <LoadingIndicator>Resetting...</LoadingIndicator> : 'Reset all ⌫'}
+      </ActionButton>
     </Container>
   );
 } 

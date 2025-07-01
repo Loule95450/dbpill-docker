@@ -1,6 +1,7 @@
 import { useEffect, useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
+import { queryApi } from '../utils/HttpApi';
 import styled from 'styled-components';
 
 import {
@@ -46,15 +47,13 @@ const CardWrapper = styled.div`
 `;
 
 const StatsHeader = styled.div`
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 12px;
   margin-bottom: 10px;
+  padding-left: 5px;
 `;
 
 const StatsText = styled.div`
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
 `;
 
 const InstructionsContainer = styled.div`
@@ -80,7 +79,6 @@ export function QueryList() {
   const [loadingSuggestions, setLoadingSuggestions] = useState<{ [key: string]: boolean }>({});
   const [rerunning, setRerunning] = useState<{ [key: string]: boolean }>({});
   const [expandedQueries, setExpandedQueries] = useState<{ [key: string]: boolean }>({});
-  const [resetting, setResetting] = useState<boolean>(false);
   const navigate = useNavigate();
   const { args } = useContext(AppContext);
 
@@ -100,165 +98,116 @@ export function QueryList() {
     setOrderBy(column);
   };
 
-  const handleReset = async () => {
-    if (!confirm('Are you sure you want to clear all query logs? This action cannot be undone.')) {
-      return;
-    }
-    
-    setResetting(true);
-    try {
-      const response = await fetch('/api/reset_query_logs', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        setStats([]);
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Failed to reset query logs');
-      }
-    } catch (error) {
-      console.error('Error resetting query logs:', error);
-      alert('Failed to reset query logs');
-    } finally {
-      setResetting(false);
-    }
-  };
-
-  const handleRerun = (queryId: string) => {
+  const handleRerun = async (queryId: string) => {
     setRerunning(prev => ({ ...prev, [queryId]: true }));
-    fetch(`/api/analyze_query?query_id=${queryId}`)
-      .then(response => response.json())
-      .then(data => {
-        setStats(prevStats => {
-          const newStats = [...prevStats];
-          const idx = newStats.findIndex(s => s.query_id === parseInt(queryId));
-          if (idx !== -1) newStats[idx] = { ...newStats[idx], ...data };
-          return newStats;
-        });
-        setRerunning(prev => ({ ...prev, [queryId]: false }));
+    try {
+      const data = await queryApi.analyzeQuery(queryId);
+      setStats(prevStats => {
+        const newStats = [...prevStats];
+        const idx = newStats.findIndex(s => s.query_id === parseInt(queryId));
+        if (idx !== -1) newStats[idx] = { ...newStats[idx], ...data };
+        return newStats;
       });
+    } catch (error) {
+      console.error('Error rerunning query:', error);
+    } finally {
+      setRerunning(prev => ({ ...prev, [queryId]: false }));
+    }
   };
 
-  const getSuggestions = (query_id: string) => {
+  const getSuggestions = async (query_id: string) => {
     if (loadingSuggestions[query_id]) {
       return;
     }
+
+    // Find any custom prompt stored in the current stats array for this query
+    const currentStat = stats.find((s) => s.query_id === parseInt(query_id));
+    const promptOverride = currentStat?.prompt_preview;
+
     setLoadingSuggestions(prev => ({ ...prev, [query_id]: true }));
-    fetch(`/api/suggest?query_id=${query_id}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to get AI suggestions');
+    try {
+      const data = await queryApi.getSuggestions(query_id, promptOverride);
+      setStats((prevStats) => {
+        const newStats = [...prevStats];
+        const index = newStats.findIndex((stat) => stat.query_id === parseInt(query_id));
+        if (index !== -1) {
+          newStats[index] = {
+            ...newStats[index],
+            ...data,
+          };
         }
-        return data;
-      })
-      .then((data) => {
-        setStats((prevStats) => {
-          const newStats = [...prevStats];
-          const index = newStats.findIndex((stat) => stat.query_id === parseInt(query_id));
-          if (index !== -1) {
-            newStats[index] = {
-              ...newStats[index],
-              ...data,
-            };
-          }
-          return newStats;
-        });
-      })
-      .catch((err) => {
-        alert(err.message);
-      })
-      .finally(() => {
-        setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));
+        return newStats;
       });
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));
+    }
   };
 
-  const applySuggestions = (query_id: string) => {
+  const applySuggestions = async (query_id: string) => {
     if (loadingSuggestions[query_id]) {
       return;
     }
     setLoadingSuggestions(prev => ({ ...prev, [query_id]: true }));
-    fetch(`/api/apply_suggestions?query_id=${query_id}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.error) {
-          alert(data.error);
-          return;
+    try {
+      const data = await queryApi.applySuggestions(query_id);
+      setStats((prevStats) => {
+        const newStats = [...prevStats];
+        const index = newStats.findIndex((stat) => stat.query_id === parseInt(query_id));
+        if (index !== -1) {
+          newStats[index] = {
+            ...newStats[index],
+            ...data,
+          };
         }
-        setStats((prevStats) => {
-          const newStats = [...prevStats];
-          const index = newStats.findIndex((stat) => stat.query_id === parseInt(query_id));
-          if (index !== -1) {
-            newStats[index] = {
-              ...newStats[index],
-              ...data,
-            };
-          }
-          return newStats;
-        });
-      })
-      .finally(() => {
-        setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));
+        return newStats;
       });
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));
+    }
   };
 
-  const revertSuggestions = (query_id: string) => {
+  const revertSuggestions = async (query_id: string) => {
     if (loadingSuggestions[query_id]) {
       return;
     }
     setLoadingSuggestions(prev => ({ ...prev, [query_id]: true }));
-    fetch(`/api/revert_suggestions?query_id=${query_id}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-      .then((response) => response.json())
-      .then((data) => {
-        setStats((prevStats) => {
-          const newStats = [...prevStats];
-          const index = newStats.findIndex((stat) => stat.query_id === parseInt(query_id));
-          if (index !== -1) {
-            newStats[index] = {
-              ...newStats[index],
-              ...data,
-            };
-          }
-          return newStats;
-        });
-      })
-      .finally(() => {
-        setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));
+    try {
+      const data = await queryApi.revertSuggestions(query_id);
+      setStats((prevStats) => {
+        const newStats = [...prevStats];
+        const index = newStats.findIndex((stat) => stat.query_id === parseInt(query_id));
+        if (index !== -1) {
+          newStats[index] = {
+            ...newStats[index],
+            ...data,
+          };
+        }
+        return newStats;
       });
+    } catch (error: any) {
+      alert(error.message);
+    } finally {
+      setLoadingSuggestions(prev => ({ ...prev, [query_id]: false }));
+    }
   };
 
   useEffect(() => {
-    fetch(`/api/all_queries?orderBy=${orderBy}&direction=${orderDirection}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    })
-      .then((response) => response.json())
-      .then((data) => {
+    const loadQueries = async () => {
+      try {
+        const data = await queryApi.getAllQueries(orderBy, orderDirection);
         setStats(data.stats);
         setOrderBy(data.orderBy);
-        setOrderDirection(data.orderDirection);
-      });
+        setOrderDirection(data.orderDirection as 'asc' | 'desc');
+      } catch (error) {
+        console.error('Error loading queries:', error);
+      }
+    };
+    
+    loadQueries();
   }, [orderBy, orderDirection]);
 
   const columns = stats[0] ? Object.keys(stats[0]) : [];
@@ -292,14 +241,6 @@ export function QueryList() {
           {stats.length} unique queries captured{' '}
           {stats.reduce((acc, stat) => acc + stat.num_instances, 0)} times
         </StatsText>
-        <ActionButton
-          $variant="danger"
-          onClick={handleReset}
-          disabled={resetting}
-          style={{ padding: '4px 8px', fontSize: '12px' }}
-        >
-          {resetting ? <LoadingIndicator>Resetting...</LoadingIndicator> : 'Reset all ⌫'}
-        </ActionButton>
       </StatsHeader>
       <QuerySort>
 
@@ -385,7 +326,11 @@ export function QueryList() {
                     disabled={rerunning[stat.query_id]}
                     style={{ marginTop: '8px', alignSelf: 'flex-start' }}
                   >
-                    {rerunning[stat.query_id] ? <LoadingIndicator>Running...</LoadingIndicator> : '↻ Run again'}
+                    {rerunning[stat.query_id] ? <LoadingIndicator>Running...</LoadingIndicator> : (
+                      <>
+                        ↻ Run again <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}>with random params</span>
+                      </>
+                    )}
                   </ActionButton>
                 </QueryStatsSection>
 
@@ -414,26 +359,6 @@ export function QueryList() {
                             </SuggestionTitleGroup>
 
                             <SuggestionActionGroup>
-                              {!stat.applied_indexes && (
-                                <ActionButton
-                                  $variant="secondary"
-                                  onClick={() => {
-                                    setStats(prevStats => {
-                                      const newStats = [...prevStats];
-                                      const index = newStats.findIndex(stat2 => stat2.query_id === stat.query_id);
-                                      newStats[index].llm_response = null;
-                                      newStats[index].suggested_indexes = null;
-                                      newStats[index].applied_indexes = null;
-                                      newStats[index].prev_exec_time = null;
-                                      newStats[index].new_exec_time = null;
-                                      return newStats;
-                                    });
-                                    getSuggestions(stat.query_id);
-                                  }}
-                                >
-                                  ↻ Ask again
-                                </ActionButton>
-                              )}
                               {!stat.applied_indexes && (
                                 <ActionButton
                                   $variant="success"
@@ -492,6 +417,32 @@ export function QueryList() {
                             </StatsTable>
                           )}
                         </SuggestionContainer>
+                      )}
+                      {!stat.suggested_indexes && (
+                        <>
+                            <p style={{ color: 'rgba(255, 255, 255, 0.5)' }}>No new index suggestions</p>
+                        </>
+                      )}
+                      {!stat.applied_indexes && (
+                        <ActionButton
+                          $variant="secondary"
+                          style={{ marginTop: stat.suggested_indexes ? '12px' : '0' }}
+                          onClick={() => {
+                            setStats(prevStats => {
+                              const newStats = [...prevStats];
+                              const index = newStats.findIndex(stat2 => stat2.query_id === stat.query_id);
+                              newStats[index].llm_response = null;
+                              newStats[index].suggested_indexes = null;
+                              newStats[index].applied_indexes = null;
+                              newStats[index].prev_exec_time = null;
+                              newStats[index].new_exec_time = null;
+                              return newStats;
+                            });
+                            getSuggestions(stat.query_id);
+                          }}
+                        >
+                          ↻ Ask again
+                        </ActionButton>
                       )}
                     </>
                   )}
