@@ -79,6 +79,9 @@ export function QueryList() {
   const [loadingSuggestions, setLoadingSuggestions] = useState<{ [key: string]: boolean }>({});
   const [rerunning, setRerunning] = useState<{ [key: string]: boolean }>({});
   const [expandedQueries, setExpandedQueries] = useState<{ [key: string]: boolean }>({});
+  const [editingIndexes, setEditingIndexes] = useState<{ [key: string]: boolean }>({});
+  const [editedIndexes, setEditedIndexes] = useState<{ [key: string]: string }>({});
+  const [hasEditedIndexes, setHasEditedIndexes] = useState<{ [key: string]: boolean }>({});
   const navigate = useNavigate();
   const { args } = useContext(AppContext);
 
@@ -87,6 +90,57 @@ export function QueryList() {
       ...prev,
       [queryId]: !prev[queryId],
     }));
+  };
+
+  const startManualIndexEdit = (queryId: string, currentIndexes?: string) => {
+    const initialContent = currentIndexes || '';
+    setEditedIndexes(prev => ({ ...prev, [queryId]: initialContent }));
+    setEditingIndexes(prev => ({ ...prev, [queryId]: true }));
+    if (!currentIndexes) {
+      // If no current indexes, we're creating a manual suggestion
+      setStats(prevStats => {
+        const newStats = [...prevStats];
+        const index = newStats.findIndex(s => s.query_id === parseInt(queryId));
+        if (index !== -1) {
+          newStats[index] = {
+            ...newStats[index],
+            suggested_indexes: '',
+            llm_response: 'Manual suggestion', // Minimal response to show we have suggestions
+          };
+        }
+        return newStats;
+      });
+    }
+  };
+
+  const saveEditedIndexes = async (queryId: string) => {
+    const editedContent = editedIndexes[queryId] || '';
+    setLoadingSuggestions(prev => ({ ...prev, [queryId]: true }));
+    
+    try {
+      // Save edited indexes to backend
+      const data = await queryApi.saveEditedIndexes(queryId, editedContent);
+      
+      setStats(prevStats => {
+        const newStats = [...prevStats];
+        const index = newStats.findIndex(s => s.query_id === parseInt(queryId));
+        if (index !== -1) {
+          newStats[index] = {
+            ...newStats[index],
+            suggested_indexes: editedContent,
+            ...data, // Include any additional data from backend
+          };
+        }
+        return newStats;
+      });
+      
+      setHasEditedIndexes(prev => ({ ...prev, [queryId]: true }));
+      setEditingIndexes(prev => ({ ...prev, [queryId]: false }));
+    } catch (error: any) {
+      alert(error.message || 'Error saving edited indexes');
+    } finally {
+      setLoadingSuggestions(prev => ({ ...prev, [queryId]: false }));
+    }
   };
 
   const order = (column: string) => {
@@ -336,17 +390,26 @@ export function QueryList() {
 
                 <QueryActionsSection>
                   {!stat.llm_response ? (
-                    <ActionButton
-                      $variant="ai-suggestion"
-                      onClick={() => getSuggestions(stat.query_id)}
-                      disabled={loadingSuggestions[stat.query_id]}
-                    >
-                      {loadingSuggestions[stat.query_id] ? (
-                        <LoadingIndicator>Getting suggestions...</LoadingIndicator>
-                      ) : (
-                        '🤖 Get AI Suggestions'
-                      )}
-                    </ActionButton>
+                    <>
+                      <ActionButton
+                        $variant="ai-suggestion"
+                        onClick={() => getSuggestions(stat.query_id)}
+                        disabled={loadingSuggestions[stat.query_id]}
+                      >
+                        {loadingSuggestions[stat.query_id] ? (
+                          <LoadingIndicator>Getting suggestions...</LoadingIndicator>
+                        ) : (
+                          '🤖 Get AI Suggestions'
+                        )}
+                      </ActionButton>
+                      <ActionButton
+                        $variant="secondary"
+                        onClick={() => startManualIndexEdit(stat.query_id.toString())}
+                        style={{ marginLeft: '8px' }}
+                      >
+                        ✏️ Manual suggestion
+                      </ActionButton>
+                    </>
                   ) : (
                     <>
                       {stat.suggested_indexes && (
@@ -356,19 +419,46 @@ export function QueryList() {
                               <StatusTag $status={stat.applied_indexes ? 'applied' : 'suggested'}>
                                 {stat.applied_indexes ? 'Applied' : 'Suggested'}
                               </StatusTag>
+                              {hasEditedIndexes[stat.query_id] && (
+                                <span style={{ color: '#ff9500', fontSize: '0.8em', marginLeft: '8px' }}>(edited)</span>
+                              )}
                             </SuggestionTitleGroup>
 
                             <SuggestionActionGroup>
-                              {!stat.applied_indexes && (
+                              {!stat.applied_indexes && !editingIndexes[stat.query_id] && (
+                                <>
+                                  <ActionButton
+                                    $variant="secondary"
+                                    onClick={() => startManualIndexEdit(stat.query_id.toString(), stat.suggested_indexes)}
+                                    style={{ padding: '4px 8px' }}
+                                  >
+                                    ✏️ Edit
+                                  </ActionButton>
+                                  <ActionButton
+                                    $variant="success"
+                                    onClick={() => applySuggestions(stat.query_id)}
+                                    disabled={loadingSuggestions[stat.query_id]}
+                                  >
+                                    {loadingSuggestions[stat.query_id] ? (
+                                      <LoadingIndicator>Applying...</LoadingIndicator>
+                                    ) : (
+                                      `⬇ Apply Index${stat.suggested_indexes.trim().split(';').filter(line => line.trim()).length > 1 ? 'es' : ''}`
+                                    )}
+                                  </ActionButton>
+                                </>
+                              )}
+
+                              {!stat.applied_indexes && editingIndexes[stat.query_id] && (
                                 <ActionButton
                                   $variant="success"
-                                  onClick={() => applySuggestions(stat.query_id)}
+                                  onClick={() => saveEditedIndexes(stat.query_id.toString())}
                                   disabled={loadingSuggestions[stat.query_id]}
+                                  style={{ padding: '4px 8px' }}
                                 >
                                   {loadingSuggestions[stat.query_id] ? (
-                                    <LoadingIndicator>Applying...</LoadingIndicator>
+                                    <LoadingIndicator>Saving...</LoadingIndicator>
                                   ) : (
-                                    `⬇ Apply Index${stat.suggested_indexes.trim().split(';').filter(line => line.trim()).length > 1 ? 'es' : ''}`
+                                    '💾 Save'
                                   )}
                                 </ActionButton>
                               )}
@@ -390,9 +480,32 @@ export function QueryList() {
                           </SuggestionTitleBar>
 
                           <SuggestionContent $status={stat.applied_indexes ? 'applied' : 'suggested'}>
-                            <HighlightedSQL>
-                              {highlightSQL(stat.suggested_indexes.trim())}
-                            </HighlightedSQL>
+                            {editingIndexes[stat.query_id] ? (
+                              <textarea
+                                value={editedIndexes[stat.query_id] || ''}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setEditedIndexes(prev => ({ ...prev, [stat.query_id]: value }));
+                                }}
+                                placeholder="Enter CREATE INDEX statements..."
+                                style={{
+                                  width: '100%',
+                                  minHeight: '120px',
+                                  backgroundColor: '#1a1a1a',
+                                  color: 'white',
+                                  border: '1px solid #333',
+                                  padding: '8px',
+                                  borderRadius: '4px',
+                                  fontFamily: 'monospace',
+                                  fontSize: '14px',
+                                  resize: 'vertical',
+                                }}
+                              />
+                            ) : (
+                              <HighlightedSQL>
+                                {highlightSQL(stat.suggested_indexes.trim())}
+                              </HighlightedSQL>
+                            )}
                           </SuggestionContent>
 
                           {hasPerformanceData && (

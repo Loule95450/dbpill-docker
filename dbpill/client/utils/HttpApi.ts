@@ -101,6 +101,16 @@ export const queryApi = {
     });
   },
 
+  async saveEditedIndexes(queryId: string | number, editedIndexes: string): Promise<QueryGroup> {
+    return apiRequest<QueryGroup>('/api/save_edited_indexes', {
+      method: 'POST',
+      body: JSON.stringify({ 
+        query_id: queryId, 
+        suggested_indexes: editedIndexes 
+      }),
+    });
+  },
+
   async applySuggestions(queryId: string | number): Promise<QueryGroup> {
     return apiRequest<QueryGroup>(`/api/apply_suggestions?query_id=${queryId}`);
   },

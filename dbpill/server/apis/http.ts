@@ -247,7 +247,8 @@ export function setup_routes(app: any, io: any) {
             await queryAnalyzer.applyIndexes(suggested_indexes);
         } catch (error) {
             console.error('Error applying indexes:', error);
-            res.json({ error: error.message });
+            res.status(500).json({ error: error.message });
+            return;
         }
         // run analyze again to get the new execution time
         const { execTime } = await queryAnalyzer.analyze({ 
@@ -500,6 +501,37 @@ export function setup_routes(app: any, io: any) {
             console.error('Error getting LLM suggestions:', error);
             const message = (error as any)?.message || 'Failed to retrieve suggestions from LLM';
             res.status(500).json({ error: message });
+        }
+    });
+
+    // Save edited indexes (manual editing functionality)
+    app.post('/api/save_edited_indexes', async (req, res) => {
+        try {
+            const { query_id, suggested_indexes } = req.body;
+            
+            if (!query_id) {
+                res.status(400).json({ error: 'query_id is required' });
+                return;
+            }
+
+            // Get current query data to check if llm_response exists
+            const currentData = await queryLogger.getQueryGroup(parseInt(query_id));
+            
+            // Prepare updates - set suggested_indexes and llm_response if it doesn't exist
+            const updates: any = { suggested_indexes };
+            if (!currentData?.llm_response) {
+                updates.llm_response = 'Manual suggestion';
+            }
+
+            // Update the suggested_indexes in the database
+            await queryLogger.updateQueryStats(parseInt(query_id), updates);
+
+            // Return the updated query data
+            const newQueryData = await queryLogger.getQueryGroup(parseInt(query_id));
+            res.json(newQueryData);
+        } catch (error) {
+            console.error('Error saving edited indexes:', error);
+            res.status(500).json({ error: error.message });
         }
     });
 }
