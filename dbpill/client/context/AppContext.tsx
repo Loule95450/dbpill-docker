@@ -1,6 +1,13 @@
 import { createContext, useState, useEffect, ReactNode } from 'react';
 import { configApi } from '../utils/HttpApi';
 
+interface VendorApiKeys {
+  anthropic?: string;
+  openai?: string;
+  xai?: string;
+  google?: string;
+}
+
 interface LLMConfig {
   id: number;
   llm_endpoint: string;
@@ -8,6 +15,7 @@ interface LLMConfig {
   llm_api_key: string | null;
   created_at: string;
   updated_at: string;
+  apiKeys?: VendorApiKeys;
 }
 
 export interface AppContextShape {

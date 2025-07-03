@@ -126,6 +126,20 @@ const HelpText = styled.span`
 
 /* -------------------------------------------------------------------------- */
 
+interface VendorApiKeys {
+  anthropic?: string;
+  openai?: string;
+  xai?: string;
+  google?: string;
+}
+
+const DEFAULT_MODELS = {
+  anthropic: 'claude-sonnet-4-0',
+  openai: 'o3',
+  gemini: 'gemini-2.5-pro',
+  grok: 'grok-3-beta'
+};
+
 export function Configs() {
   const { config, updateConfig } = useContext(AppContext);
   const [loading, setLoading] = useState(false);
@@ -135,6 +149,12 @@ export function Configs() {
     llm_endpoint: '',
     llm_model: '',
     llm_api_key: ''
+  });
+  const [apiKeys, setApiKeys] = useState<VendorApiKeys>({
+    anthropic: '',
+    openai: '',
+    xai: '',
+    google: ''
   });
   const [endpointType, setEndpointType] = useState<'anthropic' | 'openai' | 'gemini' | 'grok' | 'custom'>('anthropic');
   const [customUrl, setCustomUrl] = useState('');
@@ -152,10 +172,24 @@ export function Configs() {
         setCustomUrl(endpoint);
       }
       
+      // Set default model if none is set
+      let defaultModel = config.llm_model || '';
+      if (!defaultModel && endpoint in DEFAULT_MODELS) {
+        defaultModel = DEFAULT_MODELS[endpoint as keyof typeof DEFAULT_MODELS];
+      }
+      
       setFormData({
         llm_endpoint: config.llm_endpoint || '',
-        llm_model: config.llm_model || '',
+        llm_model: defaultModel,
         llm_api_key: config.llm_api_key || ''
+      });
+
+      // Update API keys
+      setApiKeys({
+        anthropic: config.apiKeys?.anthropic || '',
+        openai: config.apiKeys?.openai || '',
+        xai: config.apiKeys?.xai || '',
+        google: config.apiKeys?.google || ''
       });
     }
   }, [config]);
@@ -169,7 +203,8 @@ export function Configs() {
       // Use the appropriate endpoint value based on type
       const submitData = {
         ...formData,
-        llm_endpoint: endpointType === 'custom' ? customUrl : endpointType
+        llm_endpoint: endpointType === 'custom' ? customUrl : endpointType,
+        apiKeys
       };
 
       await updateConfig(submitData);
@@ -195,9 +230,24 @@ export function Configs() {
     setEndpointType(newType);
     if (newType !== 'custom') {
       setCustomUrl('');
+      // Set default model for the selected vendor if current model is empty or from another vendor
+      if (newType in DEFAULT_MODELS && (!formData.llm_model || 
+          Object.values(DEFAULT_MODELS).includes(formData.llm_model))) {
+        setFormData(prev => ({
+          ...prev,
+          llm_model: DEFAULT_MODELS[newType as keyof typeof DEFAULT_MODELS]
+        }));
+      }
     } else if (!customUrl) {
       setCustomUrl('https://');
     }
+  };
+
+  const handleApiKeyChange = (vendor: keyof VendorApiKeys, value: string) => {
+    setApiKeys(prev => ({
+      ...prev,
+      [vendor]: value
+    }));
   };
 
   const handleReset = async () => {
@@ -287,22 +337,24 @@ export function Configs() {
           <HelpText>Specify the model name/identifier for the LLM service</HelpText>
         </FormGroup>
 
-        <FormGroup>
-          <Label htmlFor="llm_api_key">API Key</Label>
-          <Input
-            type="text"
-            id="llm_api_key"
-            name="llm_api_key"
-            value={formData.llm_api_key}
-            onChange={handleInputChange}
-            placeholder="Leave empty to use CLI argument or environment variable"
-            autoComplete="off"
-            inputMode="text"
-            spellCheck={false}
-            data-lpignore="true"
-          />
-          <HelpText>Optional: API key for the LLM service (stored securely)</HelpText>
-        </FormGroup>
+        {endpointType === 'custom' && (
+          <FormGroup>
+            <Label htmlFor="llm_api_key">API Key</Label>
+            <Input
+              type="text"
+              id="llm_api_key"
+              name="llm_api_key"
+              value={formData.llm_api_key}
+              onChange={handleInputChange}
+              placeholder="Leave empty to use CLI argument or environment variable"
+              autoComplete="off"
+              inputMode="text"
+              spellCheck={false}
+              data-lpignore="true"
+            />
+            <HelpText>Optional: API key for the custom LLM endpoint (stored locally)</HelpText>
+          </FormGroup>
+        )}
 
         <Button type="submit" disabled={loading}>
           {loading ? 'Updating...' : 'Update Configuration'}
@@ -314,6 +366,82 @@ export function Configs() {
           Last updated: {new Date(config.updated_at).toLocaleString()}
         </Description>
       )}
+
+      <Title>API Keys</Title>
+      <Description>
+        Configure API keys for each LLM provider. These keys are stored locally and will be used 
+        automatically when you select the corresponding provider above.
+      </Description>
+
+      <Form onSubmit={handleSubmit} autoComplete="off">
+        <FormGroup>
+          <Label htmlFor="anthropic_key">Anthropic API Key</Label>
+          <Input
+            type="text"
+            id="anthropic_key"
+            name="anthropic_key"
+            value={apiKeys.anthropic || ''}
+            onChange={(e) => handleApiKeyChange('anthropic', e.target.value)}
+            placeholder="sk-ant-..."
+            autoComplete="off"
+            inputMode="text"
+            spellCheck={false}
+            data-lpignore="true"
+          />
+        </FormGroup>
+
+        <FormGroup>
+          <Label htmlFor="openai_key">OpenAI API Key</Label>
+          <Input
+            type="text"
+            id="openai_key"
+            name="openai_key"
+            value={apiKeys.openai || ''}
+            onChange={(e) => handleApiKeyChange('openai', e.target.value)}
+            placeholder="sk-..."
+            autoComplete="off"
+            inputMode="text"
+            spellCheck={false}
+            data-lpignore="true"
+          />
+        </FormGroup>
+
+        <FormGroup>
+          <Label htmlFor="xai_key">xAI (Grok) API Key</Label>
+          <Input
+            type="text"
+            id="xai_key"
+            name="xai_key"
+            value={apiKeys.xai || ''}
+            onChange={(e) => handleApiKeyChange('xai', e.target.value)}
+            placeholder="xai-..."
+            autoComplete="off"
+            inputMode="text"
+            spellCheck={false}
+            data-lpignore="true"
+          />
+        </FormGroup>
+
+        <FormGroup>
+          <Label htmlFor="google_key">Google API Key</Label>
+          <Input
+            type="text"
+            id="google_key"
+            name="google_key"
+            value={apiKeys.google || ''}
+            onChange={(e) => handleApiKeyChange('google', e.target.value)}
+            placeholder="AIza..."
+            autoComplete="off"
+            inputMode="text"
+            spellCheck={false}
+            data-lpignore="true"
+          />
+        </FormGroup>
+
+        <Button type="submit" disabled={loading}>
+          {loading ? 'Updating...' : 'Update API Keys'}
+        </Button>
+      </Form>
 
       <Title>Database Configuration</Title>
       <Description>You must configure the database connection string when launching the proxy: <br /><code>./dbpill --db=postgres://user:password@host:port/database</code></Description>

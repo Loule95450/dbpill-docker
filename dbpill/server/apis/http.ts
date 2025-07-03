@@ -41,7 +41,8 @@ export function setup_routes(app: any, io: any) {
         try {
             const cm = await initConfigManager();
             const config = await cm.getConfig();
-            res.json(config);
+            const apiKeys = await cm.getApiKeys();
+            res.json({ ...config, apiKeys });
         } catch (error) {
             console.error('Error getting config:', error);
             res.status(500).json({ error: error.message });
@@ -51,7 +52,7 @@ export function setup_routes(app: any, io: any) {
     app.post('/api/config', async (req, res) => {
         try {
             const cm = await initConfigManager();
-            const { llm_endpoint, llm_model, llm_api_key } = req.body;
+            const { llm_endpoint, llm_model, llm_api_key, apiKeys } = req.body;
             
             await cm.updateConfig({
                 llm_endpoint,
@@ -59,8 +60,13 @@ export function setup_routes(app: any, io: any) {
                 llm_api_key: llm_api_key || null
             });
             
+            if (apiKeys) {
+                await cm.updateApiKeys(apiKeys);
+            }
+            
             const updatedConfig = await cm.getConfig();
-            res.json(updatedConfig);
+            const updatedApiKeys = await cm.getApiKeys();
+            res.json({ ...updatedConfig, apiKeys: updatedApiKeys });
         } catch (error) {
             console.error('Error updating config:', error);
             res.status(500).json({ error: error.message });

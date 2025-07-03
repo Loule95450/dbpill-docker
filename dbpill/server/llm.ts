@@ -34,11 +34,40 @@ async function getConfigManager(): Promise<ConfigManager> {
     return configManager;
 }
 
-async function getCredentials(service: string, key: string): Promise<string> {
+async function getCredentials(endpoint: string): Promise<string> {
     const cm = await getConfigManager();
     const config = await cm.getConfig();
     
-    // Prefer config database, fall back to CLI args
+    // Map endpoint to vendor for API key lookup
+    let vendor = endpoint;
+    switch (endpoint) {
+        case 'anthropic':
+            vendor = 'anthropic';
+            break;
+        case 'openai':
+            vendor = 'openai';
+            break;
+        case 'gemini':
+            vendor = 'google';
+            break;
+        case 'grok':
+            vendor = 'xai';
+            break;
+        default:
+            // For custom endpoints, try to get the API key from general config
+            vendor = null;
+            break;
+    }
+    
+    // Try vendor-specific API key first
+    if (vendor) {
+        const vendorApiKey = await cm.getApiKeyForVendor(vendor);
+        if (vendorApiKey) {
+            return vendorApiKey;
+        }
+    }
+    
+    // Fall back to general config, then CLI args
     return config.llm_api_key || argv['llm-api-key'] || argv.llmApiKey;
 }
 
@@ -70,7 +99,7 @@ export async function prompt_llm({
     const baseURL = resolveBaseURL(endpoint);
     const model = config.llm_model || argv['llm-model'] || argv.llmModel || 'claude-sonnet-4-20250514';
 
-    const API_KEY = await getCredentials(endpoint, 'api_key');
+    const API_KEY = await getCredentials(endpoint);
 
     const openai = new OpenAI({
         apiKey: API_KEY,
