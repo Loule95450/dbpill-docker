@@ -494,6 +494,44 @@ export function QueryList() {
                                       )}
                                     </ActionButton>
                                   )}
+
+                                  {isReverted && !editingIndexes[suggestionKey] && (
+                                    <>
+                                      <ActionButton
+                                        $variant="secondary"
+                                        onClick={() => startManualIndexEdit(suggestionKey, s.suggested_indexes)}
+                                        style={{ padding: '4px 8px' }}
+                                      >
+                                        ✏️ Edit
+                                      </ActionButton>
+                                      <ActionButton
+                                        $variant="success"
+                                        onClick={() => applySuggestions(stat.query_id)}
+                                        disabled={loadingSuggestions[stat.query_id]}
+                                      >
+                                        {loadingSuggestions[stat.query_id] ? (
+                                          <LoadingIndicator>Re-applying...</LoadingIndicator>
+                                        ) : (
+                                          `⬇ Re-apply${s.suggested_indexes && s.suggested_indexes.trim().split(';').filter(line => line.trim()).length > 1 ? 'es' : ''}`
+                                        )}
+                                      </ActionButton>
+                                    </>
+                                  )}
+
+                                  {isReverted && editingIndexes[suggestionKey] && (
+                                    <ActionButton
+                                      $variant="success"
+                                      onClick={() => saveEditedIndexes(suggestionKey)}
+                                      disabled={loadingSuggestions[stat.query_id]}
+                                      style={{ padding: '4px 8px' }}
+                                    >
+                                      {loadingSuggestions[stat.query_id] ? (
+                                        <LoadingIndicator>Saving...</LoadingIndicator>
+                                      ) : (
+                                        '💾 Save'
+                                      )}
+                                    </ActionButton>
+                                  )}
                                 </SuggestionActionGroup>
                               </SuggestionTitleBar>
 
@@ -520,33 +558,34 @@ export function QueryList() {
                                     }}
                                   />
                                 ) : (
-                                  <HighlightedSQL>
-                                    {highlightSQL((s.suggested_indexes || '').trim())}
-                                  </HighlightedSQL>
+                                  <>
+                                    <HighlightedSQL>
+                                      {highlightSQL((s.suggested_indexes || '').trim())}
+                                    </HighlightedSQL>
+                                    {hasPerf && (
+                                      <StatsTable style={{ marginTop: '12px' }}>
+                                        <StatsTableBody>
+                                          <StatsTableRow>
+                                            <StatsTableLabelCell>Before</StatsTableLabelCell>
+                                            <StatsTableValueCell>{formatNumber(s.prev_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
+                                            <StatsTableImprovementCell rowSpan={2}>
+                                              <PerformanceBadge $improvement={improvementVal}>
+                                                {improvementVal > 2.0 ? '⬆' : improvementVal < 0.8 ? '⬇' : ''} {formatNumber(improvementVal)}× improvement
+                                              </PerformanceBadge>
+                                            </StatsTableImprovementCell>
+                                          </StatsTableRow>
+                                          <StatsTableRow>
+                                            <StatsTableLabelCell>After</StatsTableLabelCell>
+                                            <StatsTableValueCell>
+                                              {formatNumber(s.new_exec_time)} <NumUnit>ms</NumUnit>
+                                            </StatsTableValueCell>
+                                          </StatsTableRow>
+                                        </StatsTableBody>
+                                      </StatsTable>
+                                    )}
+                                  </>
                                 )}
                               </SuggestionContent>
-
-                              {hasPerf && (
-                                <StatsTable>
-                                  <StatsTableBody>
-                                    <StatsTableRow>
-                                      <StatsTableLabelCell>Before</StatsTableLabelCell>
-                                      <StatsTableValueCell>{formatNumber(s.prev_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
-                                      <StatsTableImprovementCell rowSpan={2}>
-                                        <PerformanceBadge $improvement={improvementVal}>
-                                          {improvementVal > 2.0 ? '⬆' : improvementVal < 0.8 ? '⬇' : ''} {formatNumber(improvementVal)}× improvement
-                                        </PerformanceBadge>
-                                      </StatsTableImprovementCell>
-                                    </StatsTableRow>
-                                    <StatsTableRow>
-                                      <StatsTableLabelCell>After</StatsTableLabelCell>
-                                      <StatsTableValueCell>
-                                        {formatNumber(s.new_exec_time)} <NumUnit>ms</NumUnit>
-                                      </StatsTableValueCell>
-                                    </StatsTableRow>
-                                  </StatsTableBody>
-                                </StatsTable>
-                              )}
                             </SuggestionContainer>
                           );
                         })
@@ -640,33 +679,34 @@ export function QueryList() {
                                 }}
                               />
                             ) : (
-                              <HighlightedSQL>
-                                {highlightSQL(stat.suggested_indexes.trim())}
-                              </HighlightedSQL>
+                              <>
+                                <HighlightedSQL>
+                                  {highlightSQL(stat.suggested_indexes.trim())}
+                                </HighlightedSQL>
+                                {hasPerformanceData && (
+                                  <StatsTable style={{ marginTop: '12px' }}>
+                                    <StatsTableBody>
+                                      <StatsTableRow>
+                                        <StatsTableLabelCell>Before</StatsTableLabelCell>
+                                        <StatsTableValueCell>{formatNumber(stat.prev_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
+                                        <StatsTableImprovementCell rowSpan={2}>
+                                          <PerformanceBadge $improvement={improvement}>
+                                            {improvement > 2.0 ? '⬆' : improvement < 0.8 ? '⬇' : ''} {formatNumber(improvement)}× improvement
+                                          </PerformanceBadge>
+                                        </StatsTableImprovementCell>
+                                      </StatsTableRow>
+                                      <StatsTableRow>
+                                        <StatsTableLabelCell>After</StatsTableLabelCell>
+                                        <StatsTableValueCell>
+                                          {formatNumber(stat.new_exec_time)} <NumUnit>ms</NumUnit>
+                                        </StatsTableValueCell>
+                                      </StatsTableRow>
+                                    </StatsTableBody>
+                                  </StatsTable>
+                                )}
+                              </>
                             )}
                           </SuggestionContent>
-
-                          {hasPerformanceData && (
-                            <StatsTable>
-                              <StatsTableBody>
-                                <StatsTableRow>
-                                  <StatsTableLabelCell>Before</StatsTableLabelCell>
-                                  <StatsTableValueCell>{formatNumber(stat.prev_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
-                                  <StatsTableImprovementCell rowSpan={2}>
-                                    <PerformanceBadge $improvement={improvement}>
-                                      {improvement > 2.0 ? '⬆' : improvement < 0.8 ? '⬇' : ''} {formatNumber(improvement)}× improvement
-                                    </PerformanceBadge>
-                                  </StatsTableImprovementCell>
-                                </StatsTableRow>
-                                <StatsTableRow>
-                                  <StatsTableLabelCell>After</StatsTableLabelCell>
-                                  <StatsTableValueCell>
-                                    {formatNumber(stat.new_exec_time)} <NumUnit>ms</NumUnit>
-                                  </StatsTableValueCell>
-                                </StatsTableRow>
-                              </StatsTableBody>
-                            </StatsTable>
-                          )}
                         </SuggestionContainer>
                       )}
                       {!stat.suggested_indexes && (
@@ -692,7 +732,7 @@ export function QueryList() {
                             getSuggestions(stat.query_id);
                           }}
                         >
-                          ↻ Ask again
+                          ↻ Ask for more suggestions
                         </ActionButton>
                       )}
                     </>
