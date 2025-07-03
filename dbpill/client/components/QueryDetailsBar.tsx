@@ -6,16 +6,31 @@ import {
   QueryDetailsBottomBarSection,
   QueryDetailsTabButton,
   QueryDetailsPanel,
-  ActionButton,
   LoadingIndicator,
-  StatsTable,
   StatsTableBody,
   StatsTableRow,
-  StatsTableLabelCell,
   StatsTableValueCell,
   StatsTableActionCell,
   StatsTableHeaderCell,
   ExpandArrow,
+  InstanceTypeContainer,
+  InstanceTypeLabel,
+  InstanceTypeSelect,
+  TableItemContainer,
+  TableDefinitionPre,
+
+  FullWidthStatsTable,
+  ParameterCell,
+  CompactActionButton,
+  ShowMoreContainer,
+  ShowMoreButton,
+  PromptContainer,
+  PromptTitle,
+  EditedIndicator,
+  PromptActionGroup,
+  PromptActionButton,
+  PromptTextarea,
+  ContentPre,
 } from '../styles/Styled';
 import { formatNumber } from '../utils/formatNumber';
 
@@ -38,6 +53,9 @@ export function QueryDetailsBar({
   const [runningInstances, setRunningInstances] = useState<{ [key: string]: boolean }>({});
   const [instanceType, setInstanceType] = useState<'slowest' | 'fastest' | 'latest'>('latest');
 
+  // Individual runs display state
+  const [displayLimit, setDisplayLimit] = useState<number>(20);
+
   // Prompt editing state
   const [isEditingPrompt, setIsEditingPrompt] = useState<boolean>(false);
   const [editedPrompt, setEditedPrompt] = useState<string>('');
@@ -50,6 +68,8 @@ export function QueryDetailsBar({
   useEffect(() => {
     setHasEditedPrompt(false);
     setIsEditingPrompt(false);
+    // Reset runs display state when query changes
+    setDisplayLimit(20);
   }, [queryId]);
 
   // Whenever queryDetails change, reset editedPrompt
@@ -209,37 +229,30 @@ export function QueryDetailsBar({
         <QueryDetailsPanel>
           {activeTab === 'query-plan' && (
             <div>
-              <div style={{ marginBottom: '1rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                <span style={{ fontWeight: 'bold' }}>Instance type:</span>
-                <select 
+              <InstanceTypeContainer>
+                <InstanceTypeLabel>Instance type:</InstanceTypeLabel>
+                <InstanceTypeSelect 
                   value={instanceType} 
                   onChange={(e) => handleInstanceTypeChange(e.target.value as 'slowest' | 'fastest' | 'latest')}
-                  style={{ 
-                    padding: '4px 8px', 
-                    borderRadius: '4px', 
-                    border: '1px solid #333',
-                    backgroundColor: '#1a1a1a',
-                    color: 'white'
-                  }}
                 >
                   <option value="latest">Latest</option>
                   <option value="slowest">Slowest</option>
                   <option value="fastest">Fastest</option>
-                </select>
-              </div>
-              <pre>{queryDetails?.selected_instance?.query_plan ?? 'Loading...'}</pre>
+                </InstanceTypeSelect>
+              </InstanceTypeContainer>
+              <ContentPre>{queryDetails?.selected_instance?.query_plan ?? 'Loading...'}</ContentPre>
             </div>
           )}
 
           {activeTab === 'query-tables' && (
             relevantTables ? (
               Object.entries(relevantTables).map(([table, info]: any) => (
-                <div key={table} style={{ marginBottom: '1rem' }}>
+                <TableItemContainer key={table}>
                   <h2>{table}: {formatNumber(info.table_size_bytes)} bytes, est. {formatNumber(info.estimated_rows)} rows</h2>
                   {info.table_definition && (
-                    <pre style={{ whiteSpace: 'pre-wrap', marginTop: '0.5rem' }}>{info.table_definition}</pre>
+                    <TableDefinitionPre>{info.table_definition}</TableDefinitionPre>
                   )}
-                </div>
+                </TableItemContainer>
               ))
             ) : (
               'Loading...'
@@ -259,59 +272,72 @@ export function QueryDetailsBar({
                 });
                 const maxParams = Math.max(...allParams.map((params: any[]) => params.length), 0);
                 
+                const totalRuns = queryDetails.instances.length;
+                const displayedInstances = queryDetails.instances.slice(0, displayLimit);
+                const hasMoreRuns = totalRuns > displayLimit;
+                
                 return (
-                  <StatsTable style={{ width: '100%' }}>
-                    <StatsTableBody>
-                      <StatsTableRow>
-                        {Array.from({ length: maxParams }, (_, i) => (
-                          <StatsTableHeaderCell key={i}>Param ${i + 1}</StatsTableHeaderCell>
-                        ))}
-                        <StatsTableHeaderCell>Exec Time</StatsTableHeaderCell>
-                        <StatsTableHeaderCell>Plan Time</StatsTableHeaderCell>
-                        <StatsTableHeaderCell>Action</StatsTableHeaderCell>
-                      </StatsTableRow>
-                      {queryDetails.instances.map((inst: any, i: number) => {
-                        const instanceKey = `${queryId}-${inst.instance_id}`;
-                        let parsedParams: any[] = [];
-                        try {
-                          parsedParams = JSON.parse(inst.params);
-                        } catch {
-                          parsedParams = [];
-                        }
-                        
-                        return (
-                          <StatsTableRow key={inst.instance_id}>
-                            {Array.from({ length: maxParams }, (_, paramIndex) => (
-                              <StatsTableLabelCell key={paramIndex} style={{ 
-                                maxWidth: '150px', 
-                                whiteSpace: 'nowrap', 
-                                overflow: 'hidden', 
-                                textOverflow: 'ellipsis' 
-                              }}>
-                                {parsedParams[paramIndex] || ''}
-                              </StatsTableLabelCell>
-                            ))}
-                            <StatsTableValueCell>{formatNumber(inst.exec_time)} ms</StatsTableValueCell>
-                            <StatsTableValueCell>{formatNumber(inst.plan_time)} ms</StatsTableValueCell>
-                            <StatsTableActionCell>
-                              <ActionButton
-                                $variant="secondary"
-                                onClick={() => handleInstanceRerun(inst.instance_id, inst.params)}
-                                disabled={runningInstances[instanceKey]}
-                                style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', padding: '4px 8px', minWidth: '60px' }}
-                              >
-                                {runningInstances[instanceKey] ? (
-                                  <LoadingIndicator>Running...</LoadingIndicator>
-                                ) : (
-                                  '↻ Run again'
-                                )}
-                              </ActionButton>
-                            </StatsTableActionCell>
-                          </StatsTableRow>
-                        );
-                      })}
-                    </StatsTableBody>
-                  </StatsTable>
+                  <div>
+
+                    <FullWidthStatsTable>
+                      <StatsTableBody>
+                        <StatsTableRow>
+                          {Array.from({ length: maxParams }, (_, i) => (
+                            <StatsTableHeaderCell key={i}>Param ${i + 1}</StatsTableHeaderCell>
+                          ))}
+                          <StatsTableHeaderCell>Exec Time</StatsTableHeaderCell>
+                          <StatsTableHeaderCell>Plan Time</StatsTableHeaderCell>
+                          <StatsTableHeaderCell>Action</StatsTableHeaderCell>
+                        </StatsTableRow>
+                        {displayedInstances.map((inst: any, i: number) => {
+                          const instanceKey = `${queryId}-${inst.instance_id}`;
+                          let parsedParams: any[] = [];
+                          try {
+                            parsedParams = JSON.parse(inst.params);
+                          } catch {
+                            parsedParams = [];
+                          }
+                          
+                          return (
+                            <StatsTableRow key={inst.instance_id}>
+                              {Array.from({ length: maxParams }, (_, paramIndex) => (
+                                <ParameterCell key={paramIndex}>
+                                  {parsedParams[paramIndex] || ''}
+                                </ParameterCell>
+                              ))}
+                              <StatsTableValueCell>{formatNumber(inst.exec_time)} ms</StatsTableValueCell>
+                              <StatsTableValueCell>{formatNumber(inst.plan_time)} ms</StatsTableValueCell>
+                              <StatsTableActionCell>
+                                <CompactActionButton
+                                  $variant="secondary"
+                                  onClick={() => handleInstanceRerun(inst.instance_id, inst.params)}
+                                  disabled={runningInstances[instanceKey]}
+                                >
+                                  {runningInstances[instanceKey] ? (
+                                    <LoadingIndicator>Running...</LoadingIndicator>
+                                  ) : (
+                                    '↻ Run again'
+                                  )}
+                                </CompactActionButton>
+                              </StatsTableActionCell>
+                            </StatsTableRow>
+                          );
+                        })}
+                      </StatsTableBody>
+                    </FullWidthStatsTable>
+
+                    {/* Show more button */}
+                    {hasMoreRuns && (
+                      <ShowMoreContainer>
+                        <ShowMoreButton
+                          $variant="secondary"
+                          onClick={() => setDisplayLimit(prev => prev + 200)}
+                        >
+                          Show more ({Math.min(200, totalRuns - displayLimit)} more runs)
+                        </ShowMoreButton>
+                      </ShowMoreContainer>
+                    )}
+                  </div>
                 );
               })()
             ) : (
@@ -320,17 +346,16 @@ export function QueryDetailsBar({
           )}
 
           {activeTab === 'ai-prompt' && (
-            <div style={{ position: 'relative', width: '100%' }}>
+            <PromptContainer>
               {/* Toggle edit button */}
-              <h2>
+              <PromptTitle>
                 Prompt for AI suggestions
-                {hasEditedPrompt && <span style={{ color: '#ff9500', fontSize: '0.8em', marginLeft: '8px' }}>(edited)</span>}
-              </h2>
-              <div style={{ position: 'absolute', top: 0, right: 0, display: 'flex', gap: '8px' }}>
+                {hasEditedPrompt && <EditedIndicator>(edited)</EditedIndicator>}
+              </PromptTitle>
+              <PromptActionGroup>
                 {hasEditedPrompt && (
-                  <ActionButton
+                  <PromptActionButton
                     $variant="secondary"
-                    style={{ padding: '4px 8px' }}
                     onClick={async () => {
                       setHasEditedPrompt(false);
                       // Fetch fresh data from server to get original prompt
@@ -353,26 +378,24 @@ export function QueryDetailsBar({
                     }}
                   >
                     ↩ Reset to original
-                  </ActionButton>
+                  </PromptActionButton>
                 )}
-                <ActionButton
+                <PromptActionButton
                   $variant="secondary"
-                  style={{ padding: '4px 8px' }}
                   onClick={handleCopyPrompt}
                 >
                   {copiedPrompt ? 'Copied!' : '📋 Copy prompt'}
-                </ActionButton>
-                <ActionButton
+                </PromptActionButton>
+                <PromptActionButton
                   $variant="secondary"
-                  style={{ padding: '4px 8px' }}
                   onClick={() => setIsEditingPrompt(prev => !prev)}
                 >
                   {isEditingPrompt ? 'Done editing' : '✏️ Edit prompt manually'}
-                </ActionButton>
-              </div>
+                </PromptActionButton>
+              </PromptActionGroup>
 
               {isEditingPrompt ? (
-                <textarea
+                <PromptTextarea
                   value={editedPrompt}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -388,26 +411,16 @@ export function QueryDetailsBar({
                     // Also update local queryDetails for immediate display
                     setQueryDetails(prev => prev ? { ...prev, prompt_preview: val } : prev);
                   }}
-                  style={{
-                    width: '100%',
-                    minHeight: '300px',
-                    backgroundColor: '#1a1a1a',
-                    color: 'white',
-                    border: '1px solid #333',
-                    padding: '8px',
-                    borderRadius: '4px',
-                    whiteSpace: 'pre-wrap',
-                  }}
                 />
               ) : (
-                <pre style={{ whiteSpace: 'pre-wrap' }}>{queryDetails?.prompt_preview ?? 'No prompt'}</pre>
+                <ContentPre>{queryDetails?.prompt_preview ?? 'No prompt'}</ContentPre>
               )}
-            </div>
+            </PromptContainer>
           )}
 
           {activeTab === 'ai-response' && (
             queryDetails?.suggestions && Array.isArray(queryDetails.suggestions) && queryDetails.suggestions.length > 0 ? (
-              <pre style={{ whiteSpace: 'pre-wrap' }}>
+              <ContentPre>
                 {queryDetails.suggestions
                   .slice()
                   .reverse() // Convert from DESC order to ascending (oldest first)
@@ -415,9 +428,9 @@ export function QueryDetailsBar({
                     `--- Suggestion #${idx + 1} ---\n${suggestion.llm_response || ''}`
                   )
                   .join('\n\n')}
-              </pre>
+              </ContentPre>
             ) : queryDetails?.llm_response ? (
-              <pre style={{ whiteSpace: 'pre-wrap' }}>{queryDetails.llm_response}</pre>
+              <ContentPre>{queryDetails.llm_response}</ContentPre>
             ) : (
               'No AI response'
             )

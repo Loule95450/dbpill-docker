@@ -599,3 +599,103 @@ export const QueryDetailsPanel = styled.div`
 export const ExpandArrow = styled.span`
   color: rgba(255, 255, 255, 0.3);
 `;
+
+// QueryDetailsBar specific components
+export const InstanceTypeContainer = styled.div`
+  margin-bottom: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+`;
+
+export const InstanceTypeLabel = styled.span`
+  font-weight: bold;
+`;
+
+export const InstanceTypeSelect = styled.select`
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #333;
+  background-color: #1a1a1a;
+  color: white;
+`;
+
+export const TableItemContainer = styled.div`
+  margin-bottom: 1rem;
+`;
+
+export const TableDefinitionPre = styled.pre`
+  white-space: pre-wrap;
+  margin-top: 0.5rem;
+`;
+
+
+
+export const FullWidthStatsTable = styled(StatsTable)`
+  width: 100%;
+`;
+
+export const ParameterCell = styled(StatsTableLabelCell)`
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+export const CompactActionButton = styled(ActionButton)`
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 4px 8px;
+  min-width: 60px;
+`;
+
+export const ShowMoreContainer = styled.div`
+  margin-top: 1rem;
+  text-align: center;
+`;
+
+export const ShowMoreButton = styled(ActionButton)`
+  padding: 8px 16px;
+`;
+
+export const PromptContainer = styled.div`
+  position: relative;
+  width: 100%;
+`;
+
+export const PromptTitle = styled.h2`
+  margin: 0;
+`;
+
+export const EditedIndicator = styled.span`
+  color: #ff9500;
+  font-size: 0.8em;
+  margin-left: 8px;
+`;
+
+export const PromptActionGroup = styled.div`
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  gap: 8px;
+`;
+
+export const PromptActionButton = styled(ActionButton)`
+  padding: 4px 8px;
+`;
+
+export const PromptTextarea = styled.textarea`
+  width: 100%;
+  min-height: 300px;
+  background-color: #1a1a1a;
+  color: white;
+  border: 1px solid #333;
+  padding: 8px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-family: "Inconsolata", monospace;
+`;
+
+export const ContentPre = styled.pre`
+  white-space: pre-wrap;
+`;

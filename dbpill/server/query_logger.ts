@@ -330,7 +330,7 @@ ORDER BY
         const result = results[0];
 
         const instances = await this.all(`
-            SELECT * FROM query_instances WHERE query_id = ? ORDER BY timestamp DESC LIMIT 20 
+            SELECT * FROM query_instances WHERE query_id = ? ORDER BY timestamp DESC 
         `, [queryId]);
 
         result.instances = instances;
