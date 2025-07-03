@@ -98,9 +98,11 @@ export function QueryList() {
     setEditingIndexes(prev => ({ ...prev, [queryId]: true }));
     if (!currentIndexes) {
       // If no current indexes, we're creating a manual suggestion
+      // Check if this is a suggestion key (contains hyphen) or a plain query ID
+      const actualQueryId = queryId.includes('-') ? queryId.split('-')[0] : queryId;
       setStats(prevStats => {
         const newStats = [...prevStats];
-        const index = newStats.findIndex(s => s.query_id === parseInt(queryId));
+        const index = newStats.findIndex(s => s.query_id === parseInt(actualQueryId));
         if (index !== -1) {
           newStats[index] = {
             ...newStats[index],
@@ -115,15 +117,17 @@ export function QueryList() {
 
   const saveEditedIndexes = async (queryId: string) => {
     const editedContent = editedIndexes[queryId] || '';
-    setLoadingSuggestions(prev => ({ ...prev, [queryId]: true }));
+    // Check if this is a suggestion key (contains hyphen) or a plain query ID
+    const actualQueryId = queryId.includes('-') ? queryId.split('-')[0] : queryId;
+    setLoadingSuggestions(prev => ({ ...prev, [actualQueryId]: true }));
     
     try {
       // Save edited indexes to backend
-      const data = await queryApi.saveEditedIndexes(queryId, editedContent);
+      const data = await queryApi.saveEditedIndexes(actualQueryId, editedContent);
       
       setStats(prevStats => {
         const newStats = [...prevStats];
-        const index = newStats.findIndex(s => s.query_id === parseInt(queryId));
+        const index = newStats.findIndex(s => s.query_id === parseInt(actualQueryId));
         if (index !== -1) {
           newStats[index] = {
             ...newStats[index],
@@ -139,7 +143,7 @@ export function QueryList() {
     } catch (error: any) {
       alert(error.message || 'Error saving edited indexes');
     } finally {
-      setLoadingSuggestions(prev => ({ ...prev, [queryId]: false }));
+      setLoadingSuggestions(prev => ({ ...prev, [actualQueryId]: false }));
     }
   };
 
@@ -412,7 +416,141 @@ export function QueryList() {
                     </>
                   ) : (
                     <>
-                      {stat.suggested_indexes && (
+                      {/* Render list of suggestions if available */}
+                      {stat.suggestions && Array.isArray(stat.suggestions) && stat.suggestions.length > 0 ? (
+                        stat.suggestions.map((s: any, idx: number) => {
+                          // Determine status based on applied and reverted flags
+                          const isReverted = !!s.reverted;
+                          const isApplied = !!s.applied && !isReverted;
+                          const isSuggested = !s.applied && !isReverted;
+                          
+                          const status = isReverted ? 'reverted' : isApplied ? 'applied' : 'suggested';
+                          const statusText = isReverted ? 'Reverted' : isApplied ? 'Applied' : 'Suggested';
+                          
+                          const hasPerf = s.prev_exec_time !== null && s.new_exec_time !== null && s.prev_exec_time !== undefined && s.new_exec_time !== undefined;
+                          const improvementVal = hasPerf ? (s.prev_exec_time / s.new_exec_time) : 0;
+                          const suggestionKey = `${stat.query_id}-${idx}`;
+                          return (
+                            <SuggestionContainer key={idx}>
+                              <SuggestionTitleBar $status={status}>
+                                <SuggestionTitleGroup>
+                                  <StatusTag $status={status}>
+                                    {statusText}
+                                  </StatusTag>
+                                  {hasEditedIndexes[suggestionKey] && (
+                                    <span style={{ color: '#ff9500', fontSize: '0.8em', marginLeft: '8px' }}>(edited)</span>
+                                  )}
+                                </SuggestionTitleGroup>
+
+                                <SuggestionActionGroup>
+                                  {isSuggested && !editingIndexes[suggestionKey] && (
+                                    <>
+                                      <ActionButton
+                                        $variant="secondary"
+                                        onClick={() => startManualIndexEdit(suggestionKey, s.suggested_indexes)}
+                                        style={{ padding: '4px 8px' }}
+                                      >
+                                        ✏️ Edit
+                                      </ActionButton>
+                                      <ActionButton
+                                        $variant="success"
+                                        onClick={() => applySuggestions(stat.query_id)}
+                                        disabled={loadingSuggestions[stat.query_id]}
+                                      >
+                                        {loadingSuggestions[stat.query_id] ? (
+                                          <LoadingIndicator>Applying...</LoadingIndicator>
+                                        ) : (
+                                          `⬇ Apply Index${s.suggested_indexes && s.suggested_indexes.trim().split(';').filter(line => line.trim()).length > 1 ? 'es' : ''}`
+                                        )}
+                                      </ActionButton>
+                                    </>
+                                  )}
+
+                                  {isSuggested && editingIndexes[suggestionKey] && (
+                                    <ActionButton
+                                      $variant="success"
+                                      onClick={() => saveEditedIndexes(suggestionKey)}
+                                      disabled={loadingSuggestions[stat.query_id]}
+                                      style={{ padding: '4px 8px' }}
+                                    >
+                                      {loadingSuggestions[stat.query_id] ? (
+                                        <LoadingIndicator>Saving...</LoadingIndicator>
+                                      ) : (
+                                        '💾 Save'
+                                      )}
+                                    </ActionButton>
+                                  )}
+
+                                  {isApplied && (
+                                    <ActionButton
+                                      $variant="danger"
+                                      onClick={() => revertSuggestions(stat.query_id)}
+                                      disabled={loadingSuggestions[stat.query_id]}
+                                    >
+                                      {loadingSuggestions[stat.query_id] ? (
+                                        <LoadingIndicator>Reverting...</LoadingIndicator>
+                                      ) : (
+                                        '⬆ Revert'
+                                      )}
+                                    </ActionButton>
+                                  )}
+                                </SuggestionActionGroup>
+                              </SuggestionTitleBar>
+
+                              <SuggestionContent $status={status}>
+                                {editingIndexes[suggestionKey] ? (
+                                  <textarea
+                                    value={editedIndexes[suggestionKey] || ''}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      setEditedIndexes(prev => ({ ...prev, [suggestionKey]: value }));
+                                    }}
+                                    placeholder="Enter CREATE INDEX statements..."
+                                    style={{
+                                      width: '100%',
+                                      minHeight: '120px',
+                                      backgroundColor: '#1a1a1a',
+                                      color: 'white',
+                                      border: '1px solid #333',
+                                      padding: '8px',
+                                      borderRadius: '4px',
+                                      fontFamily: 'monospace',
+                                      fontSize: '14px',
+                                      resize: 'vertical',
+                                    }}
+                                  />
+                                ) : (
+                                  <HighlightedSQL>
+                                    {highlightSQL((s.suggested_indexes || '').trim())}
+                                  </HighlightedSQL>
+                                )}
+                              </SuggestionContent>
+
+                              {hasPerf && (
+                                <StatsTable>
+                                  <StatsTableBody>
+                                    <StatsTableRow>
+                                      <StatsTableLabelCell>Before</StatsTableLabelCell>
+                                      <StatsTableValueCell>{formatNumber(s.prev_exec_time)} <NumUnit>ms</NumUnit></StatsTableValueCell>
+                                      <StatsTableImprovementCell rowSpan={2}>
+                                        <PerformanceBadge $improvement={improvementVal}>
+                                          {improvementVal > 2.0 ? '⬆' : improvementVal < 0.8 ? '⬇' : ''} {formatNumber(improvementVal)}× improvement
+                                        </PerformanceBadge>
+                                      </StatsTableImprovementCell>
+                                    </StatsTableRow>
+                                    <StatsTableRow>
+                                      <StatsTableLabelCell>After</StatsTableLabelCell>
+                                      <StatsTableValueCell>
+                                        {formatNumber(s.new_exec_time)} <NumUnit>ms</NumUnit>
+                                      </StatsTableValueCell>
+                                    </StatsTableRow>
+                                  </StatsTableBody>
+                                </StatsTable>
+                              )}
+                            </SuggestionContainer>
+                          );
+                        })
+                      ) : stat.suggested_indexes && (
                         <SuggestionContainer>
                           <SuggestionTitleBar $status={stat.applied_indexes ? 'applied' : 'suggested'}>
                             <SuggestionTitleGroup>

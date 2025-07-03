@@ -73,6 +73,32 @@ export class QueryLogger {
             )
         `);
 
+        // New table to store every suggestion separately so we can keep
+        // a full history of prompts / responses and track whether a
+        // suggestion has been applied or reverted as well as the before /
+        // after performance numbers.
+        await this.exec(`
+            CREATE TABLE IF NOT EXISTS index_suggestions (
+                suggestion_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query_id INTEGER,
+                prompt TEXT,
+                llm_response TEXT,
+                suggested_indexes TEXT,
+                -- Whether the indexes generated in this suggestion are
+                -- currently applied to the database.
+                applied BOOLEAN DEFAULT 0,
+                -- Whether an applied suggestion has subsequently been
+                -- reverted.  Once reverted we keep the row for history
+                -- purposes but mark reverted = 1 so we can distinguish the
+                -- state.
+                reverted BOOLEAN DEFAULT 0,
+                prev_exec_time REAL,
+                new_exec_time REAL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (query_id) REFERENCES queries(query_id)
+            )
+        `);
+
         await this.exec(`
             CREATE UNIQUE INDEX IF NOT EXISTS idx_queries_unique
             ON queries(host, database, port, query);
@@ -197,18 +223,26 @@ export class QueryLogger {
             : actualOrderBy;
 
         let results: QueryGroup[] = await this.all(`
-WITH query_stats AS (
+WITH latest_suggestion AS (
+  SELECT s1.* FROM index_suggestions s1
+  INNER JOIN (
+    SELECT query_id, MAX(suggestion_id) AS max_id
+    FROM index_suggestions
+    GROUP BY query_id
+  ) s2 ON s1.query_id = s2.query_id AND s1.suggestion_id = s2.max_id
+),
+query_stats AS (
   SELECT
     q.query_id,
     q.query,
     q.host,
     q.database,
     q.port,
-    q.llm_response,
-    q.suggested_indexes,
-    q.applied_indexes,
-    q.prev_exec_time,
-    q.new_exec_time,
+    ls.llm_response,
+    ls.suggested_indexes,
+    ls.applied as applied_indexes,
+    ls.prev_exec_time,
+    ls.new_exec_time,
     COUNT(q.query_id) AS num_instances,
     MAX(qi.exec_time) AS max_exec_time,
     MIN(qi.exec_time) AS min_exec_time,
@@ -217,35 +251,47 @@ WITH query_stats AS (
     queries q
   JOIN
     query_instances qi ON q.query_id = qi.query_id
+  LEFT JOIN latest_suggestion ls ON q.query_id = ls.query_id
   ${filters.length > 0 ? filterSql : ''}
   GROUP BY
-    q.query_id, q.query, q.host, q.database, q.port, q.llm_response, q.suggested_indexes, q.applied_indexes, q.prev_exec_time, q.new_exec_time
+    q.query_id, q.query, q.host, q.database, q.port, ls.llm_response, ls.suggested_indexes, ls.applied, ls.prev_exec_time, ls.new_exec_time
 )
 SELECT
-  qs.query_id,
-  qs.query,
-  qs.host,
-  qs.database,
-  qs.port,
-  qs.max_exec_time,
-  qs.min_exec_time,
-  qs.avg_exec_time,
-  qs.prev_exec_time,
-  qs.new_exec_time,
-  qs.llm_response,
-  qs.suggested_indexes,
-  qs.applied_indexes,
-  qs.num_instances,
+  qs.*,
   (qs.avg_exec_time * qs.num_instances) AS total_time,
   CASE WHEN qs.prev_exec_time IS NOT NULL AND qs.new_exec_time IS NOT NULL THEN (qs.prev_exec_time / qs.new_exec_time) ELSE NULL END AS improvement_ratio
-FROM
-  query_stats qs
+FROM query_stats qs
 ${queryId ? 'WHERE qs.query_id = ?' : ''}
 ORDER BY
   ${improvementOrderBy} ${orderDirection === 'desc' ? 'DESC NULLS LAST' : 'ASC NULLS LAST'}${orderBy === 'prev_exec_time/new_exec_time' ? ', (qs.avg_exec_time * qs.num_instances) DESC' : ''};
         `, [...params, ...(queryId ? [queryId] : [])]);
 
         const query_ids = results.map(result => result.query_id);
+
+        // Attach full suggestion history for each query so the frontend can
+        // show a list if it wants to.  We also concatenate all AI responses
+        // so the existing UI that displays a single text blob continues to
+        // work unchanged.
+        for (const res of results) {
+            const suggestions = await this.getSuggestionsForQuery(res.query_id);
+            // @ts-ignore – dynamic property so we don't have to change the
+            // QueryGroup interface everywhere right now.
+            res.suggestions = suggestions;
+
+            if (suggestions.length > 0) {
+                res.llm_response = suggestions.map((s: any, idx: number) => `--- Suggestion #${suggestions.length - idx} ---\n${s.llm_response || ''}` ).join('\n\n');
+                res.suggested_indexes = suggestions.map((s: any, idx: number) => s.suggested_indexes || '').join('\n\n');
+                const latest = suggestions[0]; // because ORDER BY DESC now, latest is at the beginning
+                res.applied_indexes = latest.applied ? latest.suggested_indexes : null;
+                res.prev_exec_time = latest.prev_exec_time;
+                res.new_exec_time = latest.new_exec_time;
+            } else {
+                // ensure properties exist for consistency
+                res.llm_response = null;
+                res.suggested_indexes = null;
+                res.applied_indexes = null;
+            }
+        }
         const query = `
             SELECT qi.*
             FROM query_instances qi
@@ -352,10 +398,23 @@ ORDER BY
       `, [...Object.values(updates), queryId]);
     }
 
-  async addSuggestion({ query_id, llm_response, suggested_indexes }: { query_id: number, llm_response: string, suggested_indexes: string }) {
-    await this.run(`
-      UPDATE queries SET llm_response = ?, suggested_indexes = ? WHERE query_id = ?
-    `, [llm_response, suggested_indexes, query_id]);
+  async addSuggestion({ query_id, prompt, llm_response, suggested_indexes }: { query_id: number; prompt?: string; llm_response: string; suggested_indexes: string }) {
+    // Store the suggestion in the dedicated table so we have a full history.
+    await this.run(
+      `INSERT INTO index_suggestions (query_id, prompt, llm_response, suggested_indexes)
+       VALUES (?, ?, ?, ?)`,
+      [query_id, prompt ?? null, llm_response, suggested_indexes]
+    );
+
+    // For backwards-compatibility with older parts of the code base (and to
+    // avoid a huge refactor touching many files at once) we still update the
+    // latest information on the parent row in the `queries` table.  This lets
+    // existing UI that expects these columns to continue working while we
+    // migrate progressively to the new data model.
+    await this.run(
+      `UPDATE queries SET llm_response = ?, suggested_indexes = ? WHERE query_id = ?`,
+      [llm_response, suggested_indexes, query_id]
+    );
   }
   
     async resetQueryData(): Promise<void> {
@@ -364,6 +423,62 @@ ORDER BY
         // Delete all queries
         await this.exec('DELETE FROM queries');
     }
+
+  /* ------------------------------------------------------------------ */
+  /*                       Suggestion-level helpers                     */
+  /* ------------------------------------------------------------------ */
+
+  async getSuggestionsForQuery(queryId: number): Promise<any[]> {
+    return this.all(
+      `SELECT * FROM index_suggestions WHERE query_id = ? ORDER BY created_at DESC`,
+      [queryId]
+    );
+  }
+
+  async getLatestSuggestion(queryId: number): Promise<any | undefined> {
+    return this.get(
+      `SELECT * FROM index_suggestions WHERE query_id = ? ORDER BY suggestion_id DESC LIMIT 1`,
+      [queryId]
+    );
+  }
+
+  async getLatestUnappliedSuggestion(queryId: number): Promise<any | undefined> {
+    return this.get(
+      `SELECT * FROM index_suggestions WHERE query_id = ? AND applied = 0 ORDER BY suggestion_id DESC LIMIT 1`,
+      [queryId]
+    );
+  }
+
+  async getLatestAppliedSuggestion(queryId: number): Promise<any | undefined> {
+    return this.get(
+      `SELECT * FROM index_suggestions WHERE query_id = ? AND applied = 1 ORDER BY suggestion_id DESC LIMIT 1`,
+      [queryId]
+    );
+  }
+
+  async updateSuggestion(suggestionId: number, updates: Record<string, any>): Promise<void> {
+    const keys = Object.keys(updates);
+    if (keys.length === 0) return;
+
+    const sql = `UPDATE index_suggestions SET ${keys.map(k => `${k} = ?`).join(', ')} WHERE suggestion_id = ?`;
+    await this.run(sql, [...Object.values(updates), suggestionId]);
+  }
+
+  async markSuggestionApplied(suggestionId: number, { prev_exec_time, new_exec_time }: { prev_exec_time: number, new_exec_time: number }): Promise<void> {
+    await this.updateSuggestion(suggestionId, {
+      applied: 1,
+      reverted: 0,
+      prev_exec_time,
+      new_exec_time
+    });
+  }
+
+  async markSuggestionReverted(suggestionId: number): Promise<void> {
+    await this.updateSuggestion(suggestionId, {
+      applied: 0,
+      reverted: 1
+    });
+  }
 
     async close(): Promise<void> {
         if (this.db) {

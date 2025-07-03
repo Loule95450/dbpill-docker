@@ -305,7 +305,7 @@ export const QueryActionsSection = styled(QuerySection)`
   justify-content: center;
 `;
 
-export const StatusTag = styled.div<{ $status: 'suggested' | 'applied' }>`
+export const StatusTag = styled.div<{ $status: 'suggested' | 'applied' | 'reverted' }>`
   display: inline-block;
   
   ${props => props.$status === 'suggested' && `
@@ -314,6 +314,10 @@ export const StatusTag = styled.div<{ $status: 'suggested' | 'applied' }>`
   
   ${props => props.$status === 'applied' && `
     color:rgb(110, 215, 180);
+  `}
+  
+  ${props => props.$status === 'reverted' && `
+    color:rgb(248, 113, 113);
   `}
 `;
 
@@ -335,8 +339,12 @@ export const ActionGroup = styled.div`
   margin-top: 8px;
 `;
 
-export const SuggestionContent = styled.div<{ $status: 'suggested' | 'applied' }>`
-  background: ${props => props.$status === 'applied' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(59, 130, 246, 0.2)'};
+export const SuggestionContent = styled.div<{ $status: 'suggested' | 'applied' | 'reverted' }>`
+  background: ${props => 
+    props.$status === 'applied' ? 'rgba(16, 185, 129, 0.2)' :
+    props.$status === 'reverted' ? 'rgba(239, 68, 68, 0.2)' :
+    'rgba(59, 130, 246, 0.2)'
+  };
   padding: 12px;
   margin-bottom: 12px;
   flex-grow: 1;
@@ -449,12 +457,16 @@ export const StatsTableImprovementCell = styled.td`
   vertical-align: middle;
 `;
 
-export const SuggestionTitleBar = styled.div<{ $status: 'suggested' | 'applied' }>`
+export const SuggestionTitleBar = styled.div<{ $status: 'suggested' | 'applied' | 'reverted' }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background-color: ${props => props.$status === 'applied' ? 'rgba(16, 185, 129, 0.37)' : 'rgba(59, 131, 246, 0.35)'};
+  background-color: ${props => 
+    props.$status === 'applied' ? 'rgba(16, 185, 129, 0.37)' :
+    props.$status === 'reverted' ? 'rgba(239, 68, 68, 0.35)' :
+    'rgba(59, 131, 246, 0.35)'
+  };
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   border-top-left-radius: 10px;
   border-top-right-radius: 10px;
