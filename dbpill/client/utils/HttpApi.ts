@@ -24,6 +24,7 @@ interface QueryGroup {
   hidden?: boolean;
   instances?: any[];
   prompt_preview?: string;
+  suggestions?: any[];
 }
 
 interface QueryStatsResponse {
@@ -101,22 +102,47 @@ export const queryApi = {
     });
   },
 
-  async saveEditedIndexes(queryId: string | number, editedIndexes: string): Promise<QueryGroup> {
+  async saveEditedIndexes(queryId: string | number, editedIndexes: string, suggestionId?: string | number): Promise<QueryGroup> {
+    const requestBody: any = { 
+      query_id: queryId, 
+      suggested_indexes: editedIndexes 
+    };
+    
+    if (suggestionId) {
+      requestBody.suggestion_id = suggestionId;
+    }
+    
     return apiRequest<QueryGroup>('/api/save_edited_indexes', {
       method: 'POST',
-      body: JSON.stringify({ 
-        query_id: queryId, 
-        suggested_indexes: editedIndexes 
-      }),
+      body: JSON.stringify(requestBody),
     });
   },
 
-  async applySuggestions(queryId: string | number): Promise<QueryGroup> {
-    return apiRequest<QueryGroup>(`/api/apply_suggestions?query_id=${queryId}`);
+  async createManualSuggestion(queryId: string | number): Promise<QueryGroup> {
+    return apiRequest<QueryGroup>('/api/create_manual_suggestion', {
+      method: 'POST',
+      body: JSON.stringify({ query_id: queryId }),
+    });
   },
 
-  async revertSuggestions(queryId: string | number): Promise<QueryGroup> {
-    return apiRequest<QueryGroup>(`/api/revert_suggestions?query_id=${queryId}`);
+  async deleteSuggestion(suggestionId: string | number): Promise<QueryGroup> {
+    return apiRequest<QueryGroup>(`/api/suggestion/${suggestionId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async applySuggestions(queryId: string | number, suggestionId?: string | number): Promise<QueryGroup> {
+    const url = suggestionId 
+      ? `/api/apply_suggestions?query_id=${queryId}&suggestion_id=${suggestionId}`
+      : `/api/apply_suggestions?query_id=${queryId}`;
+    return apiRequest<QueryGroup>(url);
+  },
+
+  async revertSuggestions(queryId: string | number, suggestionId?: string | number): Promise<QueryGroup> {
+    const url = suggestionId 
+      ? `/api/revert_suggestions?query_id=${queryId}&suggestion_id=${suggestionId}`
+      : `/api/revert_suggestions?query_id=${queryId}`;
+    return apiRequest<QueryGroup>(url);
   },
 
   async getRelevantTables(queryId: string | number): Promise<Record<string, { table_size_bytes: number; estimated_rows: number; table_definition: string }>> {

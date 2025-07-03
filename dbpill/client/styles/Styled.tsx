@@ -492,12 +492,48 @@ export const SuggestionActionGroup = styled.div`
   margin-left: auto;
 `;
 
+export const DeleteSuggestionButton = styled.div`
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background-color: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  z-index: 10;
+  
+  &:hover {
+    background-color: #ff6666;
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #666;
+  }
+`;
+
 export const SuggestionContainer = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
   align-self: stretch;
   box-sizing: border-box;
+  position: relative;
+  
+  &:hover ${DeleteSuggestionButton} {
+    opacity: 1;
+  }
 `; 
 
 
