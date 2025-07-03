@@ -1,6 +1,5 @@
 import OpenAI from 'openai';
 
-import argv from './args';
 import { ConfigManager } from './config_manager';
 
 // Map logical endpoint identifiers to their corresponding OpenAI-compatible base URLs
@@ -67,8 +66,8 @@ async function getCredentials(endpoint: string): Promise<string> {
         }
     }
     
-    // Fall back to general config, then CLI args
-    return config.llm_api_key || argv['llm-api-key'] || argv.llmApiKey;
+    // Fall back to general config
+    return config.llm_api_key;
 }
 
 export interface Completion {
@@ -76,6 +75,32 @@ export interface Completion {
     input_tokens: number;
     output_tokens: number;
     stopSequence: string | undefined;
+}
+
+// Helper to decide which parameter name to use for specifying the number of
+// completion tokens. Some providers/models (e.g. OpenAI reasoning models like
+// o1, o3, o4) have migrated to `max_completion_tokens` while the majority still expect `max_tokens`.
+function resolveMaxTokensParam(endpoint: string, model: string): 'max_tokens' | 'max_completion_tokens' {
+    const m = model?.toLowerCase() || '';
+
+    // OpenAI reasoning models (o1, o3, o4, etc. and their variants like mini)
+    // require the newer parameter
+    if (endpoint === 'openai' && /^o\d+/.test(m)) {
+        return 'max_completion_tokens';
+    }
+
+    // Default – legacy OpenAI-style parameter.
+    return 'max_tokens';
+}
+
+// Helper to choose a sensible default for the maximum number of tokens the
+// model is allowed to generate. Most contemporary chat models comfortably
+// support ≥8k completion tokens, so we default to 8192 unless explicitly
+// overridden at runtime.
+function resolveDefaultMaxTokens(endpoint: string, model: string): number {
+    // In future this could consult per-model limits. For now, follow the user
+    // guidance of using ~8k across the board.
+    return 8192;
 }
 
 export async function prompt_llm({
@@ -97,7 +122,7 @@ export async function prompt_llm({
 
     const endpoint = config.llm_endpoint || 'anthropic';
     const baseURL = resolveBaseURL(endpoint);
-    const model = config.llm_model || argv['llm-model'] || argv.llmModel || 'claude-sonnet-4-20250514';
+    const model = config.llm_model || 'claude-sonnet-4-0';
 
     const API_KEY = await getCredentials(endpoint);
 
@@ -106,39 +131,39 @@ export async function prompt_llm({
         baseURL,
     });
 
-    // Some models (e.g. o3) reject the legacy `max_tokens` parameter in favour of
-    // `max_completion_tokens`. We optimistically try the standard `max_tokens`
-    // call first, then *silently* retry once with `max_completion_tokens` if the
-    // API responds with the specific "Unsupported parameter: 'max_tokens'" error.
+    // Determine parameter name & sensible default for completion length based
+    // on the provider/model.
+    const tokenParamName = resolveMaxTokensParam(endpoint, model);
+    const maxTokens = resolveDefaultMaxTokens(endpoint, model);
+
+    const completionParams: any = {
+        model,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 1,
+        stop,
+        stream: true,
+    };
+    completionParams[tokenParamName] = maxTokens;
+
+    // Attempt the request with the selected parameter. If the provider rejects
+    // it, retry once with the alternative parameter name for maximum
+    // compatibility.
+    const altTokenParamName = tokenParamName === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens';
+
     let stream: any;
     try {
-        stream = await openai.chat.completions.create({
-            model,
-            messages: [{ role: 'user', content: prompt }],
-            max_tokens: 4096,
-            temperature: 1,
-            stop,
-            stream: true,
-        } as any);
+        stream = await openai.chat.completions.create(completionParams as any);
     } catch (err: any) {
         const msg: string | undefined = err?.message || err?.error?.message;
-        const shouldRetry = msg && msg.includes('max_completion_tokens');
+        const shouldRetry = msg && msg.includes(`Unsupported parameter`) && msg.includes(tokenParamName);
 
         if (shouldRetry) {
-            // Retry once with the new parameter. We purposefully avoid logging
-            // the first failure so that consumers do not see a spurious error.
-            stream = await openai.chat.completions.create({
-                model,
-                messages: [{ role: 'user', content: prompt }],
-                // The OpenAI client typings may not include this yet, so we cast
-                // to any to bypass TS restrictions.
-                max_completion_tokens: 4096,
-                temperature: 1,
-                stop,
-                stream: true,
-            } as any);
+            // Swap the parameter name and try once more.
+            delete completionParams[tokenParamName];
+            completionParams[altTokenParamName] = maxTokens;
+            stream = await openai.chat.completions.create(completionParams as any);
         } else {
-            throw err; // Different error – propagate as before
+            throw err; // Propagate unknown errors
         }
     }
 

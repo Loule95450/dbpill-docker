@@ -279,7 +279,7 @@ export function Configs() {
       <Title>LLM Configuration</Title>
       <Description>
         Configure the Language Model settings for query optimization suggestions. 
-        These settings will override command-line arguments and persist across restarts.
+        These settings are stored locally and persist across restarts.
       </Description>
 
       {message && (
@@ -346,13 +346,13 @@ export function Configs() {
               name="llm_api_key"
               value={formData.llm_api_key}
               onChange={handleInputChange}
-              placeholder="Leave empty to use CLI argument or environment variable"
+              placeholder="Enter API key for custom endpoint"
               autoComplete="off"
               inputMode="text"
               spellCheck={false}
               data-lpignore="true"
             />
-            <HelpText>Optional: API key for the custom LLM endpoint (stored locally)</HelpText>
+            <HelpText>API key for the custom LLM endpoint (stored locally)</HelpText>
           </FormGroup>
         )}
 

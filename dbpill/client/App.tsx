@@ -134,9 +134,9 @@ function NavBarContent({ args }: { args: MainProps['args'] }) {
           const dbName = dbUrl.pathname.replace(/^\/+/, '');
           const proxyPort = args['proxy-port'] || args.proxyPort || 5433;
           
-          // Get LLM info - prioritize config over CLI args
-          const llmEndpoint = config?.llm_endpoint || args['llm-endpoint'] || args.llmEndpoint || 'anthropic';
-          const llmModel = config?.llm_model || args['llm-model'] || args.llmModel || 'claude-sonnet-4';
+          // Get LLM info - only use config values
+          const llmEndpoint = config?.llm_endpoint || 'anthropic';
+          const llmModel = config?.llm_model || 'claude-sonnet-4';
           
           // Format LLM provider name for display
           let llmProvider = llmEndpoint;

@@ -28,21 +28,6 @@ const _yargs = yargs(hideBin(process.argv))
         default: 5433,
         type: 'number',
         describe: 'Port to run the SQL proxy on'
-    })
-    .option('llm-api-key', {
-        default: null,
-        type: 'string',
-        describe: 'API key for the LLM service'
-    })
-    .option('llm-endpoint', {
-        default: 'anthropic',
-        type: 'string',
-        describe: 'LLM endpoint (anthropic, openai, or custom URL like https://openrouter.ai/api/v1)'
-    })
-    .option('llm-model', {
-        default: 'claude-sonnet-4',
-        type: 'string',
-        describe: 'LLM model to use (e.g., o3, claude-sonnet-4)'
     });
 
 const argv = _yargs.argv;

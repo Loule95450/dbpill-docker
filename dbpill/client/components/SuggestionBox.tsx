@@ -222,7 +222,7 @@ export function SuggestionBox({
               {isLoading ? (
                 <LoadingIndicator>Re-applying...</LoadingIndicator>
               ) : (
-                `⬇ Re-apply${suggestion.suggested_indexes && suggestion.suggested_indexes.trim().split(';').filter(line => line.trim()).length > 1 ? 'es' : ''}`
+                `⬇ Re-apply${suggestion.suggested_indexes && suggestion.suggested_indexes.trim().split(';').filter(line => line.trim()).length > 1 ? ' Indexes' : ''}`
               )}
             </ActionButton>
           </>
