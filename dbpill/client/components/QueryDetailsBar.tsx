@@ -190,7 +190,6 @@ export function QueryDetailsBar({
         {/* AI section */}
         <QueryDetailsBottomBarSection>
           <QueryDetailsTabButton
-            disabled={!hasLlmResponse}
             $active={activeTab === 'ai-prompt'}
             onClick={() => handleTabClick('ai-prompt')}
           >
@@ -407,7 +406,17 @@ export function QueryDetailsBar({
           )}
 
           {activeTab === 'ai-response' && (
-            queryDetails?.llm_response ? (
+            queryDetails?.suggestions && Array.isArray(queryDetails.suggestions) && queryDetails.suggestions.length > 0 ? (
+              <pre style={{ whiteSpace: 'pre-wrap' }}>
+                {queryDetails.suggestions
+                  .slice()
+                  .reverse() // Convert from DESC order to ascending (oldest first)
+                  .map((suggestion: any, idx: number) => 
+                    `--- Suggestion #${idx + 1} ---\n${suggestion.llm_response || ''}`
+                  )
+                  .join('\n\n')}
+              </pre>
+            ) : queryDetails?.llm_response ? (
               <pre style={{ whiteSpace: 'pre-wrap' }}>{queryDetails.llm_response}</pre>
             ) : (
               'No AI response'

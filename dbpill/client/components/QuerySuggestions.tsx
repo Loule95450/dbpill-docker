@@ -69,19 +69,19 @@ export function QuerySuggestions({
           {loadingSuggestions[stat.query_id] ? (
             <LoadingIndicator>Getting suggestions...</LoadingIndicator>
           ) : (
-            '🤖 Get AI Suggestions'
+            '🤖 Get AI suggested indexes'
           )}
         </ActionButton>
         <ActionButton
           $variant="secondary"
           onClick={createManualSuggestion}
           disabled={loadingSuggestions[stat.query_id]}
-          style={{ marginLeft: '8px' }}
+          style={{ marginLeft: '8px', marginTop: '8px' }}
         >
           {loadingSuggestions[stat.query_id] ? (
             <LoadingIndicator>Creating...</LoadingIndicator>
           ) : (
-            '✏️ Manual suggestion'
+            '✎ Add custom index'
           )}
         </ActionButton>
       </>
@@ -153,14 +153,14 @@ export function QuerySuggestions({
               getSuggestions(stat.query_id);
             }}
           >
-            ↻ Ask for more suggestions
+            🤖 Ask for more suggestions
           </ActionButton>
           <ActionButton
             $variant="secondary"
             style={{ marginTop: '8px' }}
             onClick={createManualSuggestion}
           >
-            ✏️ Add manual suggestion
+            ✎ Add custom index
           </ActionButton>
         </>
       )}

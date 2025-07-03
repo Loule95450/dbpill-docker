@@ -279,8 +279,10 @@ ORDER BY
             res.suggestions = suggestions;
 
             if (suggestions.length > 0) {
-                res.llm_response = suggestions.map((s: any, idx: number) => `--- Suggestion #${suggestions.length - idx} ---\n${s.llm_response || ''}` ).join('\n\n');
-                res.suggested_indexes = suggestions.map((s: any, idx: number) => s.suggested_indexes || '').join('\n\n');
+                // Keep legacy llm_response and suggested_indexes for backward compatibility
+                // but let the client format them however it wants using the suggestions array
+                res.llm_response = suggestions.map((s: any) => s.llm_response || '').join('\n\n');
+                res.suggested_indexes = suggestions.map((s: any) => s.suggested_indexes || '').join('\n\n');
                 const latest = suggestions[0]; // because ORDER BY DESC now, latest is at the beginning
                 res.applied_indexes = latest.applied ? latest.suggested_indexes : null;
                 res.prev_exec_time = latest.prev_exec_time;

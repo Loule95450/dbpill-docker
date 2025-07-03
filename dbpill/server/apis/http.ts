@@ -90,83 +90,75 @@ export function setup_routes(app: any, io: any) {
             return;
         }
 
-        // If we already have an LLM response stored for this query, generate the corresponding prompt preview
-        // so that the frontend can show it without the user having to rerun the suggestion flow.
-        if (queryData.llm_response) {
-            try {
-                // Get the appropriate instance based on the instance_type parameter
-                let selectedInstance: any = null;
-                if (instanceType === 'slowest') {
-                    selectedInstance = await queryLogger.getSlowestQueryInstance(parseInt(queryId));
-                } else if (instanceType === 'fastest') {
-                    selectedInstance = await queryLogger.getFastestQueryInstance(parseInt(queryId));
-                } else {
-                    // Default to latest for backwards compatibility
-                    selectedInstance = await queryLogger.getLatestQueryInstance(parseInt(queryId));
-                }
-                
-                if (selectedInstance) {
-                    let planJson: any = null;
-                    try {
-                        planJson = JSON.parse(selectedInstance.query_plan);
-                    } catch (_) {
-                        planJson = null;
-                    }
-
-                    if (planJson) {
-                        // Helper to extract relation names from a JSON plan
-                        function extractRelationNames(plan: any): string[] {
-                            const relationNames: string[] = [];
-                            function traverse(obj: any) {
-                                if (obj && typeof obj === 'object') {
-                                    if ('Relation Name' in obj) {
-                                        // @ts-ignore – dynamic key access
-                                        relationNames.push(obj['Relation Name']);
-                                    }
-                                    for (const key in obj) {
-                                        if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                                            traverse(obj[key]);
-                                        }
-                                    }
-                                } else if (Array.isArray(obj)) {
-                                    obj.forEach(traverse);
-                                }
-                            }
-                            traverse(plan);
-                            return [...new Set(relationNames)];
-                        }
-
-                        const tables = extractRelationNames(planJson);
-                        const table_defs = await Promise.all(tables.map(table => queryAnalyzer.getTableStructure(table)));
-
-                        const prompt = generateSuggestionPrompt({
-                            queryText: queryData.query,
-                            queryPlanJson: planJson,
-                            tableDefinitions: table_defs,
-                            appliedIndexes: queryData.applied_indexes,
-                        });
-
-                        // Attach but do not persist – this is only for UI convenience
-                        // @ts-ignore
-                        queryData.prompt_preview = prompt;
-                    }
-                }
-                // Attach the selected instance for UI convenience
-                // @ts-ignore
-                queryData.selected_instance = selectedInstance;
-            } catch (err) {
-                console.error('Error generating prompt preview:', err);
+        // Generate prompt preview so that the frontend can show it without the user having to rerun the suggestion flow.
+        // This works regardless of whether there's already an LLM response.
+        try {
+            // Get the appropriate instance based on the instance_type parameter
+            let selectedInstance: any = null;
+            if (instanceType === 'slowest') {
+                selectedInstance = await queryLogger.getSlowestQueryInstance(parseInt(queryId));
+            } else if (instanceType === 'fastest') {
+                selectedInstance = await queryLogger.getFastestQueryInstance(parseInt(queryId));
+            } else {
+                // Default to latest for backwards compatibility
+                selectedInstance = await queryLogger.getLatestQueryInstance(parseInt(queryId));
             }
-        } else {
-            // Even if there's no LLM response, we still want to attach the selected instance
-            const selectedInstance = instanceType === 'slowest' 
-                ? await queryLogger.getSlowestQueryInstance(parseInt(queryId))
-                : instanceType === 'fastest'
-                ? await queryLogger.getFastestQueryInstance(parseInt(queryId))
-                : await queryLogger.getLatestQueryInstance(parseInt(queryId));
             
+            if (selectedInstance) {
+                let planJson: any = null;
+                try {
+                    planJson = JSON.parse(selectedInstance.query_plan);
+                } catch (_) {
+                    planJson = null;
+                }
+
+                if (planJson) {
+                    // Helper to extract relation names from a JSON plan
+                    function extractRelationNames(plan: any): string[] {
+                        const relationNames: string[] = [];
+                        function traverse(obj: any) {
+                            if (obj && typeof obj === 'object') {
+                                if ('Relation Name' in obj) {
+                                    // @ts-ignore – dynamic key access
+                                    relationNames.push(obj['Relation Name']);
+                                }
+                                for (const key in obj) {
+                                    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                                        traverse(obj[key]);
+                                    }
+                                }
+                            } else if (Array.isArray(obj)) {
+                                obj.forEach(traverse);
+                            }
+                        }
+                        traverse(plan);
+                        return [...new Set(relationNames)];
+                    }
+
+                    const tables = extractRelationNames(planJson);
+                    const table_defs = await Promise.all(tables.map(table => queryAnalyzer.getTableStructure(table)));
+
+                    // Get suggestion history for this query to include in prompt
+                    const suggestionHistory = await queryLogger.getSuggestionsForQuery(parseInt(queryId));
+
+                    const prompt = generateSuggestionPrompt({
+                        queryText: queryData.query,
+                        queryPlanJson: planJson,
+                        tableDefinitions: table_defs,
+                        appliedIndexes: queryData.applied_indexes,
+                        suggestionHistory: suggestionHistory,
+                    });
+
+                    // Attach but do not persist – this is only for UI convenience
+                    // @ts-ignore
+                    queryData.prompt_preview = prompt;
+                }
+            }
+            // Attach the selected instance for UI convenience
             // @ts-ignore
             queryData.selected_instance = selectedInstance;
+        } catch (err) {
+            console.error('Error generating prompt preview:', err);
         }
 
         res.json(queryData);
@@ -515,12 +507,16 @@ export function setup_routes(app: any, io: any) {
 
         const applied_indexes = stats.applied_indexes;
 
+        // Get suggestion history for this query to include in prompt
+        const suggestionHistory = await queryLogger.getSuggestionsForQuery(parseInt(queryId));
+
         // Determine which prompt to send to the LLM.
         const prompt = customPrompt && customPrompt.trim().length > 0 ? customPrompt : generateSuggestionPrompt({
             queryText: stats.query,
             queryPlanJson: queryPlan,
             tableDefinitions: table_defs,
             appliedIndexes: applied_indexes,
+            suggestionHistory: suggestionHistory,
         });
 
         try {
