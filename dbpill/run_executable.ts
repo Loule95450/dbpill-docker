@@ -59,7 +59,7 @@ function readAssetTextSync(relativePath: string): string {
 
 const port = args.port;
 const mode = 'production';
-const ssr_enabled = args.ssr;
+// const ssr_enabled = args.ssr; // Currently unused in the SEA build
 
 // Test initial database connectivity and log the outcome
 async function testDbConnection(connectionString: string) {
@@ -155,8 +155,8 @@ async function createServer() {
       let html = '';
 
       html = template.replace(`<!--ssr-outlet-->`, '')
-          .replace(`<!--ssr-head-->`, '')
-          .replace(`'<!--ssr-state-->'`, JSON.stringify(initial_state))
+        .replace(`<!--ssr-head-->`, '')
+        .replace(`'<!--ssr-state-->'`, JSON.stringify(initial_state));
 
       res.status(200).set({ 'Content-Type': 'text/html' }).end(html)
       

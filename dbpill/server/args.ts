@@ -1,5 +1,9 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const { version: packageVersion } = require('../package.json');
 
 const _yargs = yargs(hideBin(process.argv))
     .option('port', {
@@ -29,6 +33,8 @@ const _yargs = yargs(hideBin(process.argv))
         type: 'number',
         describe: 'Port to run the SQL proxy on'
     });
+
+_yargs.version(packageVersion);
 
 const argv = _yargs.argv;
 

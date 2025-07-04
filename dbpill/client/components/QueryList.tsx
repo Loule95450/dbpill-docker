@@ -159,6 +159,10 @@ export function QueryList() {
     columns.splice(columns.indexOf('query_id'), 1);
   }
 
+  const dbUrl = new URL(args.db);
+  const dbUser = dbUrl.username;
+  const dbName = dbUrl.pathname.replace(/^\/+/, '');
+
   // Show instructions if no queries are available
   if (stats.length === 0) {
     return (
@@ -166,12 +170,14 @@ export function QueryList() {
         <h1>Instructions</h1>
         {args && (
           <>
-            <p>
-              dbpill is running on port {args.proxyPort}. Change your app's PostgreSQL
-              connection to port {args.proxyPort} to start intercepting queries.
+            <p style={{color: '#fff', fontSize: '18px', background: 'rgba(255, 255, 255, 0.1)', padding: '5px 10px', borderRadius: '5px'}}>
+              dbpill is running on port <span style={{color: '#fff4a7'}}>{args.proxyPort}</span><br /> → <span style={{color: '#fff4a7'}}>postgresql://{dbUser}@localhost:{args.proxyPort}/{dbName}</span>
             </p>
-            <p>Once you start running queries through dbpill, they will appear here for analysis and optimization.</p>
-            <p>You can reset all dbpill-triggered changes from the Config tab.</p>
+            <p>
+              Change your app's PostgreSQL connection to port {args.proxyPort} to start intercepting queries.
+            </p>
+            <p>Once you start using your app &amp; running queries through dbpill, they will appear here for analysis and optimization.</p>
+            <img style={{width: '100%', height: 'auto'}} src="/client/dbpill_diagram.svg" alt="dbpill workflow diagram" />
           </>
         )}
       </InstructionsContainer>

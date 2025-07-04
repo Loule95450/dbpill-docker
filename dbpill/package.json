@@ -1,7 +1,7 @@
 {
   "name": "spiel-bun",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0",
   "scripts": {
     "dev": "npx tsx run.ts --mode development --port 3000",
     "dev-bun": "nodemon --exec 'bun run.ts' --watch server --watch shared --watch *.ts --ext ts,tsx,js,mjs,json",

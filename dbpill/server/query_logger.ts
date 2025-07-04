@@ -420,9 +420,11 @@ ORDER BY
   }
   
     async resetQueryData(): Promise<void> {
-        // Delete all query instances first (foreign key constraint)
+        // Delete child tables first to satisfy foreign key constraints
         await this.exec('DELETE FROM query_instances');
-        // Delete all queries
+        // Also delete all saved suggestions that reference queries
+        await this.exec('DELETE FROM index_suggestions');
+        // Finally, delete queries
         await this.exec('DELETE FROM queries');
     }
 

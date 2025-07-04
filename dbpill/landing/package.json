@@ -1,0 +1,13 @@
+{
+  "name": "landing",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "stripe": "^18.3.0"
+  }
+}
