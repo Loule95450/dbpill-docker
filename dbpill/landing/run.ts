@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { Database } from "bun:sqlite";
 import path from "path";
 import Stripe from "stripe";
+import { sendEmail as sendEmailSES } from "./email";
 
 // Expect Stripe keys in .env (Bun automatically loads this file)
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
@@ -181,10 +182,7 @@ ${FOOTER_HTML}${POST_FOOTER_HTML}`;
 // Email sending placeholder – replace with real implementation later
 // ---------------------------------------------------------------------------
 function sendEmail(to: string, subject: string, body: string) {
-  // TODO: integrate with actual email provider (e.g. Postmark, SES, Resend)
-  console.log("[DEV] Sending email to", to);
-  console.log("[DEV] Subject:", subject);
-  console.log("[DEV] Body:\n", body);
+  return sendEmailSES(to, subject, body);
 }
 
 // ---------------------------------------------------------------------------
@@ -405,11 +403,16 @@ Bun.serve({
 
       // Email single-use link
       const link = `${url.origin}/claim/${redeemToken}`;
-      sendEmail(
-        emailInput,
-        "Your dbpill download is ready",
-        `Hi there!\n\nThank you for purchasing dbpill. Click the link below to access your downloads:\n${link}\n\nThe link is valid for 24 hours.\n\nCheers,\ndbpill team`,
-      );
+      try {
+        await sendEmail(
+          emailInput,
+          "Your dbpill download is ready",
+          `Hi there!\n\nThank you for purchasing dbpill. Click the link below to access your downloads:\n${link}\n\nThe link is valid for 24 hours.\n\nCheers,\n- dbpill.com`,
+        );
+      } catch (err) {
+        console.error("[REDEEM] Failed to send email:", err);
+        return new Response("Failed to send email. Please try again later.", { status: 500 });
+      }
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { "Content-Type": "application/json" },
