@@ -43,26 +43,17 @@
             border-bottom: 1px solid var(--accent-color);
         }
         
-        .logo {
-            font-size: 30px;
-            font-weight: 700;
-            text-transform: lowercase;
-            letter-spacing: 2px;
-            border: 1px solid color(display-p3 0.964 0.7613 0.3253);
-            color: color(display-p3 0.964 0.7613 0.3253);
-            background: linear-gradient(to right, rgba(86, 65, 9, 0.8) 25%, rgba(59, 40, 7, 0.8) 75%);
-            display: inline-block;
-            padding: 0 20px;
-            border-radius: 30px;
-            margin-right: 8px;
-        }
-        
         .header {
             padding: 20px 0;
             background-color: rgba(0, 0, 0, 0.5);
             background: radial-gradient(circle closest-corner at 50% 10px, #202020, #111111);
             color: rgba(255, 255, 255, 0.8);
             color: #fff;
+        }
+
+        .header .logo img {
+            height: 60px;
+            display: block;
         }
 
         .hero {
@@ -80,8 +71,9 @@
         }
         
         .subheading {
-            color: #fff;
-            font-size: 18px;
+            color: #ffc134;
+            font-size: 17px;
+            line-height: 1.2em;
             margin: 0;
         }
         
@@ -89,48 +81,50 @@
             text-align: center;
             padding: 20px;
         }
-
         .cta-button {
-            display: inline-block;
-            background: rgb(69, 132, 15);
-            background: radial-gradient(circle closest-corner at 50% 10px, rgb(69, 132, 15), rgb(40, 80, 10));
-            color: rgba(255, 255, 255, 0.8);
-            text-shadow: none;
-            box-shadow:5px 5px 5px rgba(0, 0, 0, 0.5);
-            color: var(--secondary-color);
-            padding: 10px 20px;
-            text-decoration: none;
-            font-size: 30px;
-            line-height: 30px;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-            border-left: 1px solid rgba(255, 255, 255, 0.2);
-            border-right: 1px solid transparent;
-            border-bottom: 1px solid transparent;
-
+    display: inline-block;
+    /* background: rgb(69, 132, 15); */
+    background: radial-gradient(circle 370px at 0% 0px,rgb(59, 108, 146), rgb(198, 171, 74));
+    border-radius: 10px;
+    box-shadow: 5px 5px 5px rgba(0, 0, 0, 0.5);
+    /* color: var(--secondary-color); */
+    padding: 10px 10px 10px 20px;
+    text-decoration: none;
+    font-size: 30px;
+    line-height: 30px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    border-left: 1px solid rgba(255, 255, 255, 0.2);
+    border-right: 1px solid transparent;
+    border-bottom: 1px solid transparent;
+    color: #fff;
+            text-shadow: 0 -1px 0px rgba(107, 50, 0, 1);
+            /* text-shadow: 0 0 3px rgb(0, 0, 0); */
         }
+
+        .cta-button:hover {
+            /* background: rgb(69, 152, 15); */
+            /* background: radial-gradient(circle closest-corner at 50% 10px, #ffdc5c, #bc8000); */
+            filter: brightness(1.1);
+        }
+
         .cta-button:active {
             position: relative;
             top: 2px;
             left: 2px;
         }
-        .cta-button:hover {
-            background: rgb(69, 152, 15);
-            background: radial-gradient(circle closest-corner at 50% 10px, rgb(113, 173, 59), rgb(50, 99, 12));
-        }
         
         .one-time-fee {
-            color: rgba(255, 255, 255, 0.5);
+            text-shadow: none;
             font-style: italic;
             font-size: 15px;
         }
 
         .motivation {
-            color: #fff;
             padding: 1px 0;
             text-align: center;
             line-height: 1.6em;
             margin: 0;
-            background: rgba(40, 40, 40, 1);
+            background: radial-gradient(circle closest-corner at 50% 10px, #3a3a3a, #232323);
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
         
@@ -351,13 +345,13 @@
             }
         }
         .animated-gradient-text {
-            background: repeating-linear-gradient(90deg, #feffa6b1 0%, #ffffffb1 50%, #feffa6b1 100%);
-            background-size: 150% 150%;
+            background: repeating-linear-gradient(90deg, #c8ecffaa 25%, #fff834 50%, #c8ecffaa 100%);
+            background-size: 200% 200%;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
             color: transparent;
-            animation: gradient-move 3s linear infinite;
+            /* animation: gradient-move 8s linear infinite; */
         }
         /* Header layout */
         .header .container {
@@ -380,8 +374,8 @@
         <section class="header">
             <div class="container">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <div class="logo">dbpill</div>
-                    <span class="subheading">Automated SQL indexer</span>
+                    <div class="logo"><img src="./dbpill_logo.png" alt="dbpill logo" /></div>
+                    <span class="subheading">Automated<br />PostgreSQL<br />Indexer</span>
                 </div>
                 <a href="mailto:help@dbpill.com" class="contact-info">help@dbpill.com</a>
             </div>
@@ -394,7 +388,7 @@
                     <p class="animated-gradient-text" style="font-size: 20px;">
                         Stop spending money &amp; time on replicas/caching/microservices<br />when the fix was a one-liner. Happens <i style="text-shadow: 0 0 5px rgb(255, 241, 82, 0.5);">*all the time*</i>.
                     </p>
-                    <p style="font-size: 24px; color: #ffffff; text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);"><span style="color: color(display-p3 0.964 0.7613 0.3253);">dbpill</span> intercepts, finds & fixes sneaky slow queries</p>
+                    <p style="font-size: 24px; color: #ffffff; text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);"><span style="color: #ffc134;">dbpill</span> intercepts, finds & fixes sneaky slow queries</p>
                 </div>
 
                 <img class="diagram" src="./dbpill_diagram.svg" alt="dbpill workflow diagram" />
@@ -409,27 +403,20 @@
                 <div class="cta-container">
                     <span style="font-size: 14px; color: rgba(255, 255, 255, 0.9);">Version 1.0 <span style="opacity: 0.4;">released July 4, 2025</span></span><br />
                     <a href="#" id="buy-button" class="cta-button">
-                        <span style="font-size: 18px; color: rgba(255, 255, 255, 0.9);">Buy standalone executable</span><br />
-                        <span style="text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);">$100</span><br />
+                        <span style="">Buy dbpill <span style="background: rgba(0, 0, 0, 0.1); border-radius: 6px; padding: 0 5px;box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.3);">$100</span></span><br />
                         <span class="one-time-fee">
-                            <ul style="padding: 0; margin: 10px 0 0 0; line-height: 1.2em; text-align: left; list-style: none;">
-                                <li style="position: relative; padding-left: 1.2em;">
-                                    <span style="position: absolute; left: 0; opacity: 0.5;">&#8594;</span>
-                                    One-time fee
-                                </li>
-                                <li style="position: relative; padding-left: 1.2em;">
-                                    <span style="position: absolute; left: 0; opacity: 0.5;">&#8594;</span>
+                            <ul style="padding: 0; margin: 5px 0 0 0; line-height: 1.2em; text-align: left; list-style: none;">
+                                <li style="position: relative; ">
                                     OS: Mac, Linux &amp; Windows
                                 </li>
-                                <li style="position: relative; padding-left: 1.2em;">
-                                    <span style="position: absolute; left: 0; opacity: 0.5;">&#8594;</span>
+                                <li style="position: relative; ">
                                     DB: PostgreSQL only
                                 </li>
                             </ul>
                         </span>
                     </a>
                     <br />
-                    <div style="margin-top: 10px; color: rgba(255, 255, 255, 0.7);">Money back if you don't like it. <a href="#" id="redeem-link" style="color: #b7f966; text-decoration: underline;">Already purchased? Re-download</a></div>
+                    <div style="margin-top: 10px; color: rgba(255, 255, 255, 0.7);">Money back if you don't like it. <a href="#" id="redeem-link" style="color: rgb(201, 194, 142); text-decoration: underline;">Already purchased? Re-download</a></div>
                 </div>
             </div>
         </section>
@@ -486,11 +473,6 @@
                         </div>
                     </div>
                 </div> 
-            </div>
-        </section>
-
-        <section class="features">
-            <div class="container">
                 <div class="feature">
                     <p><span class='accent-1'>No code changes required</span> Just point your backend's SQL connection to dbpill.</p>
                 </div>
@@ -503,6 +485,13 @@
                 <div class="feature">
                     <p><span class="accent-2">One-click apply, one-click revert</span> Instantly test suggested index improvements.</p>
                 </div>
+            </div>
+        </section>
+
+        <section class="features">
+            <div class="container">
+                <h2>Tips</h2>
+                <p>la bla bla</p>
             </div>
         </section>
     </main>
