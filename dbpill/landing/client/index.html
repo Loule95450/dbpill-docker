@@ -93,17 +93,18 @@
         .cta-button {
             display: inline-block;
             background: rgb(69, 132, 15);
-            background: radial-gradient(circle closest-corner at 50% 10px, rgb(69, 132, 15), rgb(40, 80, 10));
+            background: radial-gradient(circle 180px at 50% 10px, rgb(103, 132, 15), rgb(57, 80, 10));
             color: rgba(255, 255, 255, 0.8);
             text-shadow: none;
             box-shadow:5px 5px 5px rgba(0, 0, 0, 0.5);
             color: var(--secondary-color);
             padding: 10px 20px;
+            border-radius: 1px;
             text-decoration: none;
             font-size: 30px;
             line-height: 30px;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
-            border-left: 1px solid rgba(255, 255, 255, 0.2);
+            border-top: 1px solid rgba(255, 255, 230, 0.2);
+            border-left: 1px solid rgba(255, 255, 230, 0.2);
             border-right: 1px solid transparent;
             border-bottom: 1px solid transparent;
 
@@ -114,8 +115,7 @@
             left: 2px;
         }
         .cta-button:hover {
-            background: rgb(69, 152, 15);
-            background: radial-gradient(circle closest-corner at 50% 10px, rgb(113, 173, 59), rgb(50, 99, 12));
+            filter: brightness(1.1);
         }
         
         .one-time-fee {
@@ -429,7 +429,7 @@
                         </span>
                     </a>
                     <br />
-                    <div style="margin-top: 10px; color: rgba(255, 255, 255, 0.7);">Money back if you don't like it. <a href="#" id="redeem-link" style="color: #b7f966; text-decoration: underline;">Already purchased? Re-download</a></div>
+                    <div style="margin-top: 10px; color: rgba(255, 255, 255, 0.7);">Money back if you don't like it. <a href="#" id="redeem-link" style="color: #9bbf4d; text-decoration: underline;">Already purchased? Re-download</a></div>
                 </div>
             </div>
         </section>
@@ -486,11 +486,7 @@
                         </div>
                     </div>
                 </div> 
-            </div>
-        </section>
 
-        <section class="features">
-            <div class="container">
                 <div class="feature">
                     <p><span class='accent-1'>No code changes required</span> Just point your backend's SQL connection to dbpill.</p>
                 </div>
@@ -503,6 +499,15 @@
                 <div class="feature">
                     <p><span class="accent-2">One-click apply, one-click revert</span> Instantly test suggested index improvements.</p>
                 </div>
+            </div>
+        </section>
+        <section class="features">
+            <div class="container">
+                <h2>Tips</h2>
+                <ul>
+                    <li>Works best with a populated database; using a clone of your production database is recommended.</li>
+                    <li>Most queries should take under a millisecond when indexed correctly, even on tables with millions or even billions of rows.</li>
+                    <li>Even if you have small tables, you can apply suggested indexes early to avoid future performance issues.</li>
             </div>
         </section>
     </main>

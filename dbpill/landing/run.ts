@@ -27,6 +27,7 @@ db.exec(`
     token TEXT NOT NULL UNIQUE,
     ip TEXT,
     user_agent TEXT,
+    claimed INTEGER DEFAULT 0,
     created_at INTEGER DEFAULT (strftime('%s','now'))
   );
   CREATE TABLE IF NOT EXISTS downloads (
@@ -38,7 +39,16 @@ db.exec(`
     user_agent TEXT,
     downloaded_at INTEGER DEFAULT (strftime('%s','now'))
   );
+  CREATE TABLE IF NOT EXISTS redeem_links (
+    token TEXT PRIMARY KEY,
+    purchase_token TEXT,
+    created_at INTEGER DEFAULT (strftime('%s','now')),
+    claimed INTEGER DEFAULT 0
+  );
 `);
+
+// Ensure new column exists for legacy DBs
+try { db.exec("ALTER TABLE redeem_links ADD COLUMN purchase_token TEXT"); } catch (_) {}
 
 // 24 h validity for tokens & session cookies (in seconds)
 const TOKEN_TTL = 60 * 60 * 24;
@@ -76,7 +86,8 @@ function getOrCreateToken(customerId: string, email: string | null, ip: string |
   return token;
 }
 
-function tokenIsValid(token: string): boolean {
+function tokenIsValid(rawToken: string): boolean {
+  const token = decodeURIComponent(rawToken.trim());
   const row = db
     .query<{ created_at: number }>("SELECT created_at FROM purchases WHERE token = ?")
     .get(token);
@@ -174,6 +185,34 @@ function sendEmail(to: string, subject: string, body: string) {
   console.log("[DEV] Sending email to", to);
   console.log("[DEV] Subject:", subject);
   console.log("[DEV] Body:\n", body);
+}
+
+// ---------------------------------------------------------------------------
+// Helper: create a single-use redeem link token tied to a purchase token
+// ---------------------------------------------------------------------------
+function createRedeemToken(purchaseToken: string): string {
+  // Invalidate any existing redeem links for this purchase token
+  db.run("UPDATE redeem_links SET claimed = 1 WHERE purchase_token = ?", purchaseToken);
+
+  const token = randomUUID();
+  db.run(
+    "INSERT INTO redeem_links (token, purchase_token) VALUES (?, ?)",
+    token,
+    purchaseToken,
+  );
+  return token;
+}
+
+function redeemTokenIsValid(token: string): boolean {
+  const row = db
+    .query<{ created_at: number; claimed: number }>(
+      "SELECT created_at, claimed FROM redeem_links WHERE token = ?",
+    )
+    .get(token);
+  if (!row) return false;
+  if (Number(row.claimed) === 1) return false;
+  const now = Math.floor(Date.now() / 1000);
+  return now - row.created_at <= TOKEN_TTL;
 }
 
 Bun.serve({
@@ -361,16 +400,11 @@ Bun.serve({
         return new Response("Purchase not found", { status: 404 });
       }
 
-      let token = purchaseRow.token;
-      // Refresh token if expired
-      if (!tokenIsValid(token)) {
-        const ip = req.headers.get("x-forwarded-for") || null;
-        const ua = req.headers.get("user-agent") || null;
-        token = getOrCreateToken(purchaseRow.customer_id, emailInput, ip, ua);
-      }
+      // Create a brand-new redeem link tied to this purchase token
+      const redeemToken = createRedeemToken(purchaseRow.token);
 
-      // Email a single-use link to the customer (link will still respect 24h token TTL)
-      const link = `${url.origin}/claim/${token}`;
+      // Email single-use link
+      const link = `${url.origin}/claim/${redeemToken}`;
       sendEmail(
         emailInput,
         "Your dbpill download is ready",
@@ -383,17 +417,44 @@ Bun.serve({
     }
 
     // --- Claim download link route -------------------------------------
-    const claimMatch = url.pathname.match(/^\/claim\/(.+)$/);
+    const claimMatch = url.pathname.match(/^\/claim\/([0-9a-fA-F-]+)\/?$/);
     if (claimMatch) {
-      const token = claimMatch[1];
-      if (!tokenIsValid(token)) {
+      const redeemToken = decodeURIComponent(claimMatch[1]);
+
+      // Validate redeem link
+      if (!redeemTokenIsValid(redeemToken)) {
         return new Response("Invalid or expired link", { status: 404 });
       }
 
+      // Fetch the redeem record to get the associated purchase token
+      const redeemRow = db
+        .query<{ purchase_token: string }>("SELECT purchase_token FROM redeem_links WHERE token = ?")
+        .get(redeemToken);
+
+      if (!redeemRow) {
+        return new Response("Invalid link", { status: 404 });
+      }
+
+      const purchaseTokenFromLink = redeemRow.purchase_token;
+
+      const ip = req.headers.get("x-forwarded-for") || null;
+      const ua = req.headers.get("user-agent") || null;
+
+      // Ensure purchase token is still valid; if expired create a fresh one via purchase row ownership
+      let activePurchaseToken = purchaseTokenFromLink;
+      if (!tokenIsValid(activePurchaseToken)) {
+        // Find purchase row by token to get customer_id
+        const pr = db.query<{ customer_id: string; email: string }>("SELECT customer_id, email FROM purchases WHERE token = ?").get(purchaseTokenFromLink);
+        activePurchaseToken = getOrCreateToken(pr?.customer_id ?? randomUUID(), pr?.email ?? null, ip, ua);
+      }
+
+      // Mark the current redeem token as claimed and invalidate others tied to same purchase
+      db.run("UPDATE redeem_links SET claimed = 1 WHERE purchase_token = ?", purchaseTokenFromLink);
+
       // Set download cookie and redirect to downloads page
       const headers = {
-        "Location": "/downloads",
-        "Set-Cookie": `download_token=${token}; Max-Age=${TOKEN_TTL}; Path=/; HttpOnly; SameSite=Strict`,
+        Location: "/downloads",
+        "Set-Cookie": `download_token=${activePurchaseToken}; Max-Age=${TOKEN_TTL}; Path=/; HttpOnly; SameSite=Strict`,
       } as const;
       return new Response(null, { status: 302, headers });
     }
