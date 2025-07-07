@@ -135,34 +135,32 @@ export function QuerySuggestions({
       )}
       
       {!stat.applied_indexes && (
-        <>
+        <div>
           <ActionButton
             $variant="secondary"
-            style={{ marginTop: stat.suggested_indexes ? '12px' : '0' }}
-            onClick={() => {
-              setStats(prevStats => {
-                const newStats = [...prevStats];
-                const index = newStats.findIndex(stat2 => stat2.query_id === stat.query_id);
-                newStats[index].llm_response = null;
-                newStats[index].suggested_indexes = null;
-                newStats[index].applied_indexes = null;
-                newStats[index].prev_exec_time = null;
-                newStats[index].new_exec_time = null;
-                return newStats;
-              });
-              getSuggestions(stat.query_id);
-            }}
+            style={{ marginRight: 10 }}
+            onClick={() => getSuggestions(stat.query_id)}
+            disabled={loadingSuggestions[stat.query_id]}
           >
-            🤖 Ask for more suggestions
+            {loadingSuggestions[stat.query_id] ? (
+              <LoadingIndicator>Getting more suggestions...</LoadingIndicator>
+            ) : (
+              '🤖 Ask for more'
+            )}
           </ActionButton>
           <ActionButton
             $variant="secondary"
-            style={{ marginTop: '8px' }}
+            style={{  }}
             onClick={createManualSuggestion}
+            disabled={loadingSuggestions[stat.query_id]}
           >
-            ✎ Add custom index
+            {loadingSuggestions[stat.query_id] ? (
+              <LoadingIndicator>Creating...</LoadingIndicator>
+            ) : (
+              '✎ Add custom'
+            )}
           </ActionButton>
-        </>
+        </div   >
       )}
     </>
   );

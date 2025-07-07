@@ -6,10 +6,10 @@ const require = createRequire(import.meta.url);
 const { version: packageVersion } = require('../package.json');
 
 const _yargs = yargs(hideBin(process.argv))
-    .option('port', {
-        default: 4000,
+    .option('web-port', {
+        default: 3000,
         type: 'number',
-        describe: 'Server port'
+        describe: 'Web server port'
     })
     .option('mode', {
         default: 'development',
