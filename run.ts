@@ -5,8 +5,6 @@ import express from "express";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { createServer as createViteServer } from 'vite'
-import { Client } from 'pg';
-
 // Override emitWarning so the default stderr printing is bypassed for the one SQLite ExperimentalWarning.
 // Keep original behaviour for everything else.
 const originalEmitWarning = process.emitWarning;
@@ -29,27 +27,14 @@ import args from "server/args";
 import { setup_routes } from "server/apis/http";
 import { setup_sockets } from "server/apis/sockets";
 import { getMainProps } from "server/main_props";
+import { buildProxyUrl, listener, startListener } from "server/proxy";
+import { testDbConnection } from "server/database_helper";
 
 const port = args.webPort;
-const mode = args.mode; // development or production
-const ssr_enabled = args.ssr;
+const mode: 'development' | 'production' = 'development'; // development or production
+const ssr_enabled = false;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-
-// Test initial database connectivity and log the outcome
-async function testDbConnection(connectionString: string) {
-  const client = new Client({ connectionString });
-  try {
-    await client.connect();
-    await client.query('SELECT 1');
-    console.log(`✅ Successfully connected to database: ${connectionString}`);
-  } catch (error) {
-    console.error(`❌ Failed to connect to database: ${connectionString}`);
-    console.error(error);
-  } finally {
-    try { await client.end(); } catch (_) { /* ignore */ }
-  }
-}
 
 async function createServer() {
   // Quickly verify database connectivity before starting the web server
@@ -155,8 +140,12 @@ async function createServer() {
     app.use(vite.middlewares)
   }
 
-  http_server.listen(port, () => {
-    console.log(`Server listening on http://localhost:${port}`)
+  http_server.listen(port, async () => {    
+    // Log proxy URL using the helper function
+    const listener = await startListener();
+    const proxyUrl = buildProxyUrl(listener);
+    console.log(`→ Connect to dbpill SQL proxy at ${proxyUrl} to intercept queries.`);
+    console.log(`→ Go to dbpill web UI at http://localhost:${port} to manage the results.`)
   })
 
   return app
