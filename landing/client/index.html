@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=800, initial-scale=1.0">
     <title>dbpill - AI-Powered Database Optimization</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,7 +24,7 @@
             font-variation-settings: "wdth" 100;
             line-height: 1.6;
             color: #fff;    
-            background-color: rgba(40, 40, 40, 1);
+            background-color: #111111;
         }
 
         h2 {
@@ -282,10 +282,10 @@
         .command-summary {
             display: block;
             padding: 5px;
-            background-color: #2d2d2d;
+            background-color: #2f0d24;
             color: #ffffff;
             font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
-            font-size: 14px;
+            font-size: 12px;
             line-height: 1.5;
             margin: 0;
             flex: 1;
@@ -474,14 +474,15 @@
                             <div class="terminal-title">Terminal</div>
                             <div style="width: 68px;"></div> <!-- Spacer for centering -->
                         </div>
-                        <code class="command-summary">
+                        <code class="command-summary" style="color: #999;">
                             <span style="color: #999;">$</span> <span style="color: #fff19f;">
                                 ./dbpill postgresql://user@host:5432/db
                             </span>
-
-                            <span style="color: #999;">PostgreSQL proxy running on port <span style="color: #ccc;">:5433</span><br />
-                            Web UI running on <span style="color: #ccc;">http://localhost:3000</span></span>
                             <br />
+                            <span>PostgreSQL proxy running on port <span style="color: #ccc;">:5433</span><br />
+                            <br />
+                            → Connect to dbpill SQL proxy at <span style="color: #ccc;">postgres://user@localhost:5433/db</span> to intercept queries.
+                            <br />→ Go to dbpill web UI at <span style="color: #ccc;">http://localhost:3000</span> to manage the results.<br />
                             <span style="color: #999;">█</span>
                             
                         </code>

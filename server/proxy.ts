@@ -187,6 +187,7 @@ class AdvancedPostgresProxySession implements IAdvancedProxySession {
             }
         } catch (error) {
             console.error('Error analyzing query:', error);
+            console.error('Did you try connecting to a database different than the one you are running dbpill on? In that case, proxy may still work, but queries will fail to get analyzed.');
         }
     }
 }

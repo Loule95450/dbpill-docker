@@ -236,7 +236,7 @@ dbpill
 
 dbpill is a database optimization tool that runs a PostgreSQL proxy that intercepts all queries your app makes, provides detailed query analyses, and proposes AI suggested optimizations that you can instantly apply & measure (and revert if needed) in one click.
 
-Run dbpill with:
+Run dbpill from your terminal with:
 
 ./dbpill postgres://username:password@host:port/database
 

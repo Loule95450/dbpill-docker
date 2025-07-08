@@ -1,7 +1,7 @@
 {
   "name": "spiel-bun",
   "private": true,
-  "version": "1.0",
+  "version": "1.0.1",
   "nodeArgs": [
     "--disable-warning=ExperimentalWarning"
   ],
