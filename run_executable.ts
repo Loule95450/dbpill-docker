@@ -221,7 +221,7 @@ async function createServer() {
   })
 
   http_server.listen(port, () => {
-    console.log(`Webapp listening on http://localhost:${port}`)
+    console.log(`Web UI running on http://localhost:${port}`)
   })
 
   return app

@@ -422,6 +422,19 @@ Bun.serve({
       });
     }
 
+    // --- Generate free redeem token ------------------------------------
+    if (url.pathname === "/generate_redeem_token") {
+      // Create an anonymous purchase token that isn’t tied to Stripe or an email.
+      // This is useful for giving out complimentary download links.
+      const customerId = `free-${randomUUID()}`;
+      const purchaseToken = getOrCreateToken(customerId, null, null, null);
+      const redeemToken = createRedeemToken(purchaseToken);
+      const link = `${url.origin}/claim/${redeemToken}`;
+      return new Response(JSON.stringify({ link }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     // --- Claim download link route -------------------------------------
     const claimMatch = url.pathname.match(/^\/claim\/([0-9a-fA-F-]+)\/?$/);
     if (claimMatch) {
