@@ -366,13 +366,14 @@
             justify-content: space-between;
         }
         .contact-info {
-            color: rgba(255, 255, 255, 0.8);
-            text-decoration: none;
-            font-size: 14px;
+            color: color(display-p3 0.964 0.7613 0.3253);
         }
         .contact-info:hover {
             text-decoration: underline;
         }
+
+
+      
     </style>
 </head>
 <body>
@@ -380,10 +381,14 @@
         <section class="header">
             <div class="container">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <div class="logo">dbpill</div>
+                    <a href="/" style="text-decoration: none;"><div class="logo">dbpill</div></a>
                     <span class="subheading">Automated SQL indexer</span>
                 </div>
-                <a href="mailto:help@dbpill.com" class="contact-info">help@dbpill.com</a>
+                <div style="font-size: 14px; color: rgba(255, 255, 255, 0.8); text-align: right;">
+                    A project by <a href="https://x.com/mayfer" class="contact-info">Murat</a>
+                    <br />
+                    Support: <a href="mailto:help@dbpill.com" class="contact-info">help@dbpill.com</a>
+                </div>
             </div>
         </section>
 

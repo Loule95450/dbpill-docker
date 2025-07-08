@@ -8,6 +8,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.840.0",
     "stripe": "^18.3.0"
   }
 }

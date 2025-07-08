@@ -40,3 +40,4 @@ bun.lock
 
 dbpill
 sea-prep.blob
+cache

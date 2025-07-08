@@ -8,7 +8,6 @@
     "dist/assets/index.css": "./dist/assets/index.css",
     "credentials/proxy.key": "./credentials/proxy.key",
     "credentials/proxy.crt": "./credentials/proxy.crt",
-    "dist/assets/dbpill_diagram.svg": "./dist/assets/dbpill_diagram.svg",
-    "dbpill.sqlite.db": "./dbpill.sqlite.db"
+    "dist/assets/dbpill_diagram.svg": "./dist/assets/dbpill_diagram.svg"
   }
 } 
