@@ -213,8 +213,9 @@ function redeemTokenIsValid(token: string): boolean {
   return now - row.created_at <= TOKEN_TTL;
 }
 
+const port = Number(process.env.PORT || 3001);
 Bun.serve({
-  port: Number(process.env.PORT || 3001),
+  port,
   async fetch(req) {
     const url = new URL(req.url);
 
@@ -472,4 +473,4 @@ Bun.serve({
   },
 });
 
-console.log("➡  dbpill landing site running on http://localhost:3001");
+console.log("➡  dbpill landing site running on http://localhost:", port);
