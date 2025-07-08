@@ -44,18 +44,23 @@ import { getMainProps } from "server/main_props";
 // will be read from the real file-system instead.
 import { getAsset, isSea } from "node:sea";
 
-// Override emitWarning so the default stderr printing is bypassed for the one SQLite ExperimentalWarning.
+// Override emitWarning so the default stderr printing is bypassed for SQLite and url.parse() warnings.
 // Keep original behaviour for everything else.
 const originalEmitWarning = process.emitWarning;
 process.emitWarning = function (warning: any, ...args: any[]) {
   // Debugging line removed to avoid noisy console output.
   // If the first argument is the message string
-  if (typeof warning === 'string' && warning.includes('SQLite')) {
+  if (typeof warning === 'string' && (warning.includes('SQLite') || warning.includes('url.parse()'))) {
     return;
   }
   // If the first argument is an Error object
-  if (warning instanceof Error && warning.name === 'ExperimentalWarning' && /SQLite/.test(warning.message)) {
-    return;
+  if (warning instanceof Error) {
+    if (warning.name === 'ExperimentalWarning' && /SQLite/.test(warning.message)) {
+      return;
+    }
+    if (warning.name === 'DeprecationWarning' && /url\.parse\(\)/.test(warning.message)) {
+      return;
+    }
   }
   // @ts-ignore – preserve Node's original signature
   return originalEmitWarning.call(this, warning, ...args);
@@ -94,33 +99,74 @@ async function createServer() {
   setup_sockets(io);
   setup_routes(app, io);
 
-  // if (mode === 'production') {
-  //   app.use('/client', express.static(path.resolve(__dirname, 'dist')))
-  // }
-
-  app.get('/client/index.css', (req, res) => {
-    res.setHeader('Content-Type', 'text/css');
-    const output = readAssetTextSync('dist/assets/index.css');
-    res.send(output);
-  });
-
-  // Serve the browser JS bundle. Historically we renamed the file to
-  // `index.js.txt` so that Node SEA treated it as an inert asset. If the
-  // project keeps the original `index.js` instead, this route will now work
-  // in both cases.
-  app.get('/client/index.js', (req, res) => {
-    res.setHeader('Content-Type', 'text/javascript');
-
-    // Prefer the vanilla file name first (Vite's default). Fallback to the
-    // legacy `.js.txt` name so existing builds keep working.
-    let output: string;
-    try {
-      output = readAssetTextSync('dist/index.js');
-    } catch (_) {
-      output = readAssetTextSync('dist/index.js.txt');
+  // Serve static assets from /client/* by mapping to /dist/*
+  app.get('/client/*', (req, res, next) => {
+    // Extract the path after /client/
+    const assetPath = req.path.replace('/client/', '');
+    
+    // Handle special cases first
+    if (assetPath === 'index.css') {
+      res.setHeader('Content-Type', 'text/css');
+      try {
+        const output = readAssetTextSync('dist/assets/index.css');
+        return res.send(output);
+      } catch (err) {
+        return res.status(404).send('CSS file not found');
+      }
     }
-
-    res.send(output);
+    
+    if (assetPath === 'index.js') {
+      res.setHeader('Content-Type', 'text/javascript');
+      // Prefer the vanilla file name first (Vite's default). Fallback to the
+      // legacy `.js.txt` name so existing builds keep working.
+      try {
+        const output = readAssetTextSync('dist/index.js');
+        return res.send(output);
+      } catch (_) {
+        try {
+          const output = readAssetTextSync('dist/index.js.txt');
+          return res.send(output);
+        } catch (err) {
+          return res.status(404).send('JS file not found');
+        }
+      }
+    }
+    
+    // For all other assets, try to serve them from dist/
+    const distPath = `dist/${assetPath}`;
+    
+    try {
+      // Try to read the asset
+      const asset = readAssetTextSync(distPath);
+      
+      // Set appropriate content type based on file extension
+      const ext = path.extname(assetPath).toLowerCase();
+      const contentTypes: { [key: string]: string } = {
+        '.js': 'text/javascript',
+        '.css': 'text/css',
+        '.html': 'text/html',
+        '.json': 'application/json',
+        '.svg': 'image/svg+xml',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.gif': 'image/gif',
+        '.ico': 'image/x-icon',
+        '.woff': 'font/woff',
+        '.woff2': 'font/woff2',
+        '.ttf': 'font/ttf',
+        '.eot': 'application/vnd.ms-fontobject'
+      };
+      
+      if (contentTypes[ext]) {
+        res.setHeader('Content-Type', contentTypes[ext]);
+      }
+      
+      res.send(asset);
+    } catch (err) {
+      // Asset not found, continue to next middleware
+      next();
+    }
   });
 
   // vite exposes all files at root by default, this is to prevent accessing server files

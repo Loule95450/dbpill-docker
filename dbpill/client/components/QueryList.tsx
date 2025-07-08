@@ -4,6 +4,7 @@ import { AppContext } from '../context/AppContext';
 import { queryApi } from '../utils/HttpApi';
 import styled from 'styled-components';
 import { QuerySuggestions } from './QuerySuggestions';
+import dbpillDiagram from '../dbpill_diagram.svg';
 
 import {
   QuerySort,
@@ -177,7 +178,7 @@ export function QueryList() {
               Change your app's PostgreSQL connection to port {args.proxyPort} to start intercepting queries.
             </p>
             <p>Once you start using your app &amp; running queries through dbpill, they will appear here for analysis and optimization.</p>
-            <img style={{width: '100%', height: 'auto'}} src="/client/dbpill_diagram.svg" alt="dbpill workflow diagram" />
+            <img style={{width: '100%', height: 'auto'}} src={dbpillDiagram} alt="dbpill workflow diagram" />
           </>
         )}
       </InstructionsContainer>

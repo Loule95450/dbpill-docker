@@ -121,7 +121,7 @@ function NavBarContent({ args }: { args: MainProps['args'] }) {
     <>
       <TextLogo>dbpill</TextLogo>
       {/* RouterNavLink automatically adds the `active` class */}
-      <StyledNavLink to="/queries">Queries</StyledNavLink>
+      <StyledNavLink to="/">Queries</StyledNavLink>
       <StyledNavLink to="/config">Config</StyledNavLink>
       <StyledNavLink to="/about">About</StyledNavLink>
 
@@ -202,7 +202,6 @@ function App({ args }: MainProps) {
           <MainContent>
             <Routes>
               <Route path="/" element={<QueryList />} />
-              <Route path="/queries" element={<QueryList />} />
               <Route path="/config" element={<Configs />} />
               <Route path="/about" element={<About />} />
             </Routes>

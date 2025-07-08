@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-NODE_VERSION="${NODE_VERSION:-22.2.0}"
+NODE_VERSION="${NODE_VERSION:-24.0.0}"
 # Tuple list: "os arch"
 TARGETS=(
   "darwin arm64"

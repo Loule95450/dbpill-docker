@@ -1,6 +1,5 @@
 import compression from "compression";
 import cookieParser from "cookie-parser";
-import cors from 'cors';
 import nocache from "nocache";
 import express from "express";
 import { getMainProps } from "server/main_props";
@@ -17,7 +16,6 @@ let configManager: ConfigManager | null = null;
 
 // socket.io context can be used to push messages from api routes
 export function setup_routes(app: any, io: any) {
-    app.use(cors());
     app.use(express.json());
     app.use(cookieParser());
     app.use(nocache());
