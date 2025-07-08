@@ -4,7 +4,7 @@ import { AppContext } from '../context/AppContext';
 import { queryApi } from '../utils/HttpApi';
 import styled from 'styled-components';
 import { QuerySuggestions } from './QuerySuggestions';
-import dbpillDiagram from '../dbpill_diagram.svg';
+import dbpillDiagram from '../assets/dbpill_diagram.svg';
 
 import {
   QuerySort,
