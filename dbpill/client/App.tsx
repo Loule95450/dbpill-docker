@@ -132,7 +132,7 @@ function NavBarContent({ args }: { args: MainProps['args'] }) {
           const host = dbUrl.hostname;
           const port = dbUrl.port || '5432';
           const dbName = dbUrl.pathname.replace(/^\/+/, '');
-          const proxyPort = args['proxy-port'] || args.proxyPort || 5433;
+          const proxyPort = args.proxyPort || 5433;
           
           // Get LLM info - only use config values
           const llmEndpoint = config?.llm_endpoint || 'anthropic';

@@ -1,3 +1,4 @@
+
 // ---------------------------------------------------------------------------
 // SEA bootstrap: restore a real, file-system-backed `require` BEFORE anything
 // else is evaluated. We do it with plain-CommonJS so esbuild keeps the code
@@ -6,7 +7,15 @@
 const { createRequire } = require('node:module');
 // Build a real file-system aware require without shadowing esbuild's internal
 // helper (which is also called `requireX`).
-const realRequire = createRequire(__filename);
+// In SEA context, use a simple fallback approach
+let realRequire;
+try {
+  // Try using __filename first (regular Node.js)
+  realRequire = createRequire(__filename);
+} catch (err) {
+  // Fallback for SEA context - use a valid file path
+  realRequire = createRequire(process.cwd() + '/package.json');
+}
 
 // Expose it globally so libraries that call plain `require()` (e.g. inside the
 // esbuild bundle) still succeed, but don't overwrite the per-module helpers
@@ -22,7 +31,6 @@ import path from 'path'
 import express from "express";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
-import { Client } from 'pg';
 
 // app specific imports
 import args from "server/args";
@@ -35,6 +43,23 @@ import { getMainProps } from "server/main_props";
 // we can read those embedded assets. When running in development mode the files
 // will be read from the real file-system instead.
 import { getAsset, isSea } from "node:sea";
+
+// Override emitWarning so the default stderr printing is bypassed for the one SQLite ExperimentalWarning.
+// Keep original behaviour for everything else.
+const originalEmitWarning = process.emitWarning;
+process.emitWarning = function (warning: any, ...args: any[]) {
+  // Debugging line removed to avoid noisy console output.
+  // If the first argument is the message string
+  if (typeof warning === 'string' && warning.includes('SQLite')) {
+    return;
+  }
+  // If the first argument is an Error object
+  if (warning instanceof Error && warning.name === 'ExperimentalWarning' && /SQLite/.test(warning.message)) {
+    return;
+  }
+  // @ts-ignore – preserve Node's original signature
+  return originalEmitWarning.call(this, warning, ...args);
+};
 
 // Convenience helper for loading a UTF-8 text asset — either from the real
 // file-system (during local development) or from the SEA bundle (when
@@ -57,29 +82,11 @@ function readAssetTextSync(relativePath: string): string {
   throw new Error(`Asset not found: ${relativePath}`);
 }
 
-const port = args.port;
+const port = args.webPort;
 const mode = 'production';
-// const ssr_enabled = args.ssr; // Currently unused in the SEA build
-
-// Test initial database connectivity and log the outcome
-async function testDbConnection(connectionString: string) {
-  const client = new Client({ connectionString });
-  try {
-    await client.connect();
-    await client.query('SELECT 1');
-    console.log(`✅ Successfully connected to database: ${connectionString}`);
-  } catch (error) {
-    console.error(`❌ Failed to connect to database: ${connectionString}`);
-    console.error(error);
-  } finally {
-    try { await client.end(); } catch (_) { /* ignore */ }
-  }
-}
+const ssr_enabled = args.ssr;
 
 async function createServer() {
-  // Quickly verify database connectivity before starting the web server
-  await testDbConnection(args.db);
-
   const app = express()
 
   const http_server = http.createServer(app);
@@ -155,8 +162,8 @@ async function createServer() {
       let html = '';
 
       html = template.replace(`<!--ssr-outlet-->`, '')
-        .replace(`<!--ssr-head-->`, '')
-        .replace(`'<!--ssr-state-->'`, JSON.stringify(initial_state));
+          .replace(`<!--ssr-head-->`, '')
+          .replace(`'<!--ssr-state-->'`, JSON.stringify(initial_state))
 
       res.status(200).set({ 'Content-Type': 'text/html' }).end(html)
       

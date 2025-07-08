@@ -53,11 +53,8 @@ npm install --save-dev esbuild postject
    ```bash
    npx esbuild run_executable.ts \
        --bundle --platform=node --format=cjs \
-       --external:better-sqlite3 \
        --outfile=server.bundle.cjs
    ```
-   The `--external` flag keeps the native `better-sqlite3` addon outside the
-   bundle (SEA cannot embed native binaries).
 
 3. **Create `sea-config.json`**
    ```jsonc
@@ -101,9 +98,7 @@ npm install --save-dev esbuild postject
 
 ### 2.4 What's inside vs. outside
 * **Inside**: bundled server CJS, `dist/**` assets, `dbpill.sqlite.db`.
-* **Outside**: the `node_modules/better-sqlite3/**` native addon. Keep that
-  folder beside `dbpill` when distributing or switch to a pure-JS SQLite driver
-  if you require a completely self-contained file.
+* The executable is now completely self-contained using Node.js 24's built-in SQLite.
 
 ---
 ## 3 Convenient npm scripts
@@ -114,7 +109,7 @@ Add these to `package.json` if you like:
     "dev": "tsx run.ts --mode development --port 3000",
     "build:client": "vite build",
 
-    "sea:bundle": "esbuild run_executable.ts --bundle --platform=node --format=cjs --external:better-sqlite3 --outfile=server.bundle.cjs",
+    "sea:bundle": "esbuild run_executable.ts --bundle --platform=node --format=cjs --outfile=server.bundle.cjs",
     "sea:prep":   "node --experimental-sea-config sea-config.json",
     "sea:build":  "npm run build:client && npm run sea:bundle && npm run sea:prep",
     "sea:inject": "postject dbpill NODE_SEA_BLOB sea-prep.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA"

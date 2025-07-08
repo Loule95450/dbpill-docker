@@ -1,6 +1,13 @@
 import { Pool, PoolClient } from 'pg';
 import { QueryLogger } from './query_logger';
 import { format as formatQuery } from 'sql-formatter';
+import argv from './args';
+
+function debug(message: string, ...args: any[]) {
+  if (argv.verbose) {
+    console.log(message, ...args);
+  }
+}
 
 interface AnalyzeParams {
   query: string;
@@ -201,7 +208,7 @@ export class QueryAnalyzer {
       }
 
     } catch (error) {
-      console.error('Error connecting to the database:', error);
+      debug('Error connecting to the database:', error);
       throw error;
     } finally {
       if (client) {
@@ -319,7 +326,7 @@ export class QueryAnalyzer {
           }
 
           const sessionId = this.sessionId;
-          console.log(query);
+          debug(query);
           return { sessionId, query, params, queryPlan, planTime, execTime, tableSizes };
         }
       }

@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 dist
+dist-esm
 dist-ssr
 *.local
 
@@ -27,3 +28,5 @@ bun.lockb
 **/credentials/*.json
 
 queries.db
+build
+server.bundle.*

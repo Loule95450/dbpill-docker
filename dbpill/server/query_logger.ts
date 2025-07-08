@@ -1,19 +1,4 @@
-import { createRequire } from 'node:module';
-
-// Load better-sqlite3 at *runtime* rather than with a top-level import.  When
-// the code is bundled into a Node SEA, the special `require()` that runs the
-// main script can only load built-in modules unless we patch it first. By
-// deferring the load we make sure our patched, file-system-aware `require`
-// implementation is already in place.
-
-// When transpiled to CommonJS, `__filename` is available and safe to use.
-const localRequire = createRequire(__filename);
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const BetterSqlite: typeof import('better-sqlite3') = localRequire('better-sqlite3');
-
-type BetterSqliteDatabase = import('better-sqlite3').Database;
-type Statement = import('better-sqlite3').Statement;
+import { DatabaseHelper } from './database_helper';
 
 export interface QueryInstance {
     instance_id: number;
@@ -48,16 +33,17 @@ export interface QueryGroup {
 }
 
 export class QueryLogger {
-    private db: BetterSqliteDatabase | null = null;
+    private dbHelper: DatabaseHelper;
 
     constructor(private dbPath: string) {
+        this.dbHelper = new DatabaseHelper(dbPath);
         this.initialize();
     }
 
     async initialize(): Promise<void> {
-        this.db = new BetterSqlite(this.dbPath, { verbose: undefined });
+        await this.dbHelper.initialize();
 
-        await this.exec(`
+        await this.dbHelper.exec(`
             CREATE TABLE IF NOT EXISTS queries (
                 query_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 host TEXT,
@@ -77,7 +63,7 @@ export class QueryLogger {
         // a full history of prompts / responses and track whether a
         // suggestion has been applied or reverted as well as the before /
         // after performance numbers.
-        await this.exec(`
+        await this.dbHelper.exec(`
             CREATE TABLE IF NOT EXISTS index_suggestions (
                 suggestion_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 query_id INTEGER,
@@ -99,12 +85,12 @@ export class QueryLogger {
             )
         `);
 
-        await this.exec(`
+        await this.dbHelper.exec(`
             CREATE UNIQUE INDEX IF NOT EXISTS idx_queries_unique
             ON queries(host, database, port, query);
         `);
 
-        await this.exec(`
+        await this.dbHelper.exec(`
             CREATE TABLE IF NOT EXISTS query_instances (
                 instance_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 query_id INTEGER,
@@ -118,41 +104,8 @@ export class QueryLogger {
             )
         `);
 
-        const num_rows = await this.get('SELECT COUNT(*) as count FROM queries');
+        const num_rows = await this.dbHelper.get('SELECT COUNT(*) as count FROM queries');
         // console.log('Database initialized with', num_rows.count, 'rows');
-    }
-
-    private checkDb(): void {
-        if (!this.db) {
-            throw new Error('Database not initialized. Call initialize() first.');
-        }
-    }
-
-
-    async exec(sql: string): Promise<void> {
-        this.checkDb();
-        this.db!.exec(sql);
-    }
-
-    async run(sql: string, params?: any[]): Promise<any> {
-        this.checkDb();
-        const stmt: Statement = this.db!.prepare(sql);
-        const result = params ? stmt.run(params) : stmt.run();
-        return result; // better-sqlite3 returns RunResult
-    }
-
-    async get(sql: string, params?: any[]): Promise<any> {
-        this.checkDb();
-        const stmt: Statement = this.db!.prepare(sql);
-        const row = params ? stmt.get(params) : stmt.get();
-        return row;
-    }
-
-    async all(sql: string, params?: any[]): Promise<any[]> {
-        this.checkDb();
-        const stmt: Statement = this.db!.prepare(sql);
-        const rows = params ? stmt.all(params) : stmt.all();
-        return rows;
     }
 
     async addQueryStats({
@@ -177,16 +130,16 @@ export class QueryLogger {
         port: number
     }): Promise<void> {
         // Insert or ignore the query grouped by host/database/port
-        await this.run(`
+        await this.dbHelper.run(`
             INSERT OR IGNORE INTO queries (query, host, database, port)
             VALUES (?, ?, ?, ?)
         `, [query, host, database, port]);
 
         // Get the query_id for this connection-specific query
-        const { query_id } = await this.get('SELECT query_id FROM queries WHERE query = ? AND host = ? AND database = ? AND port = ?', [query, host, database, port]);
+        const { query_id } = await this.dbHelper.get('SELECT query_id FROM queries WHERE query = ? AND host = ? AND database = ? AND port = ?', [query, host, database, port]);
 
         // Insert the query instance
-        await this.run(`
+        await this.dbHelper.run(`
             INSERT INTO query_instances (query_id, session_id, params, query_plan, plan_time, exec_time)
             VALUES (?, ?, ?, ?, ?, ?)
         `, [query_id, sessionId, params, queryPlan, planTime, execTime]);
@@ -222,7 +175,7 @@ export class QueryLogger {
             ? 'CASE WHEN qs.prev_exec_time IS NOT NULL AND qs.new_exec_time IS NOT NULL THEN (qs.prev_exec_time / qs.new_exec_time) ELSE NULL END'
             : actualOrderBy;
 
-        let results: QueryGroup[] = await this.all(`
+        let results: QueryGroup[] = await this.dbHelper.all(`
 WITH latest_suggestion AS (
   SELECT s1.* FROM index_suggestions s1
   INNER JOIN (
@@ -307,7 +260,7 @@ ORDER BY
 
         `;
 
-        const last_instances = await this.all(query, query_ids);
+        const last_instances = await this.dbHelper.all(query, query_ids);
 
         for(let i = 0; i < results.length; i++) {
             const result = results[i];
@@ -329,7 +282,7 @@ ORDER BY
         
         const result = results[0];
 
-        const instances = await this.all(`
+        const instances = await this.dbHelper.all(`
             SELECT * FROM query_instances WHERE query_id = ? ORDER BY timestamp DESC 
         `, [queryId]);
 
@@ -338,31 +291,31 @@ ORDER BY
     }
 
     async getQueryInstances(queryId: number): Promise<any[]> {
-        return this.all(`
+        return this.dbHelper.all(`
             SELECT * FROM query_instances WHERE query_id = ? ORDER BY exec_time DESC
         `, [queryId]);
     }
 
     async getSlowestQueryInstance(queryId: number): Promise<any | null> {
-        return this.get(`
+        return this.dbHelper.get(`
             SELECT * FROM query_instances WHERE query_id = ? ORDER BY exec_time DESC LIMIT 1
         `, [queryId]);
     }
 
     async getFastestQueryInstance(queryId: number): Promise<any | null> {
-        return this.get(`
+        return this.dbHelper.get(`
             SELECT * FROM query_instances WHERE query_id = ? ORDER BY exec_time ASC LIMIT 1
         `, [queryId]);
     }
 
     async getLatestQueryInstance(queryId: number): Promise<any | null> {
-        return this.get(`
+        return this.dbHelper.get(`
             SELECT * FROM query_instances WHERE query_id = ? ORDER BY timestamp DESC LIMIT 1
         `, [queryId]);
     }
 
     async getQueryStats(queryId: number): Promise<any> {
-        return this.get(`
+        return this.dbHelper.get(`
             SELECT q.query_id, q.query, qi.*, q.llm_response, q.suggested_indexes, q.applied_indexes
             FROM queries q
             JOIN query_instances qi ON q.query_id = qi.query_id
@@ -376,7 +329,7 @@ ORDER BY
         if (direction.toUpperCase() !== 'ASC' && direction.toUpperCase() !== 'DESC') {
             throw new Error('Invalid direction. Must be either ASC or DESC.');
         }
-        return this.all(`
+        return this.dbHelper.all(`
             SELECT q.query_id, q.query, qi.*, q.llm_response, q.suggested_indexes, q.applied_indexes
             FROM queries q
             JOIN query_instances qi ON q.query_id = qi.query_id
@@ -385,7 +338,7 @@ ORDER BY
     }
 
     async getAllQueryStats(): Promise<any[]> {
-        return this.all(`
+        return this.dbHelper.all(`
             SELECT q.query_id, q.query, qi.*, q.llm_response, q.suggested_indexes, q.applied_indexes
             FROM queries q
             JOIN query_instances qi ON q.query_id = qi.query_id
@@ -395,14 +348,14 @@ ORDER BY
 
 
     async updateQueryStats(queryId: number, updates: Partial<QueryGroup>): Promise<void> {
-      await this.run(`
+      await this.dbHelper.run(`
         UPDATE queries SET ${Object.keys(updates).map(key => `${key} = ?`).join(', ')} WHERE query_id = ?
       `, [...Object.values(updates), queryId]);
     }
 
   async addSuggestion({ query_id, prompt, llm_response, suggested_indexes }: { query_id: number; prompt?: string; llm_response: string; suggested_indexes: string }) {
     // Store the suggestion in the dedicated table so we have a full history.
-    await this.run(
+    await this.dbHelper.run(
       `INSERT INTO index_suggestions (query_id, prompt, llm_response, suggested_indexes)
        VALUES (?, ?, ?, ?)`,
       [query_id, prompt ?? null, llm_response, suggested_indexes]
@@ -413,7 +366,7 @@ ORDER BY
     // latest information on the parent row in the `queries` table.  This lets
     // existing UI that expects these columns to continue working while we
     // migrate progressively to the new data model.
-    await this.run(
+    await this.dbHelper.run(
       `UPDATE queries SET llm_response = ?, suggested_indexes = ? WHERE query_id = ?`,
       [llm_response, suggested_indexes, query_id]
     );
@@ -421,11 +374,11 @@ ORDER BY
   
     async resetQueryData(): Promise<void> {
         // Delete child tables first to satisfy foreign key constraints
-        await this.exec('DELETE FROM query_instances');
+        await this.dbHelper.exec('DELETE FROM query_instances');
         // Also delete all saved suggestions that reference queries
-        await this.exec('DELETE FROM index_suggestions');
+        await this.dbHelper.exec('DELETE FROM index_suggestions');
         // Finally, delete queries
-        await this.exec('DELETE FROM queries');
+        await this.dbHelper.exec('DELETE FROM queries');
     }
 
   /* ------------------------------------------------------------------ */
@@ -433,28 +386,28 @@ ORDER BY
   /* ------------------------------------------------------------------ */
 
   async getSuggestionsForQuery(queryId: number): Promise<any[]> {
-    return this.all(
+    return this.dbHelper.all(
       `SELECT * FROM index_suggestions WHERE query_id = ? ORDER BY created_at DESC`,
       [queryId]
     );
   }
 
   async getLatestSuggestion(queryId: number): Promise<any | undefined> {
-    return this.get(
+    return this.dbHelper.get(
       `SELECT * FROM index_suggestions WHERE query_id = ? ORDER BY suggestion_id DESC LIMIT 1`,
       [queryId]
     );
   }
 
   async getLatestUnappliedSuggestion(queryId: number): Promise<any | undefined> {
-    return this.get(
+    return this.dbHelper.get(
       `SELECT * FROM index_suggestions WHERE query_id = ? AND applied = 0 ORDER BY suggestion_id DESC LIMIT 1`,
       [queryId]
     );
   }
 
   async getLatestAppliedSuggestion(queryId: number): Promise<any | undefined> {
-    return this.get(
+    return this.dbHelper.get(
       `SELECT * FROM index_suggestions WHERE query_id = ? AND applied = 1 ORDER BY suggestion_id DESC LIMIT 1`,
       [queryId]
     );
@@ -465,7 +418,7 @@ ORDER BY
     if (keys.length === 0) return;
 
     const sql = `UPDATE index_suggestions SET ${keys.map(k => `${k} = ?`).join(', ')} WHERE suggestion_id = ?`;
-    await this.run(sql, [...Object.values(updates), suggestionId]);
+    await this.dbHelper.run(sql, [...Object.values(updates), suggestionId]);
   }
 
   async markSuggestionApplied(suggestionId: number, { prev_exec_time, new_exec_time }: { prev_exec_time: number, new_exec_time: number }): Promise<void> {
@@ -485,9 +438,23 @@ ORDER BY
   }
 
     async close(): Promise<void> {
-        if (this.db) {
-            this.db.close();
-            this.db = null;
-        }
+        await this.dbHelper.close();
+    }
+
+    // Backward compatibility methods - delegate to dbHelper
+    async get(sql: string, params?: any[]): Promise<any> {
+        return this.dbHelper.get(sql, params);
+    }
+
+    async run(sql: string, params?: any[]): Promise<any> {
+        return this.dbHelper.run(sql, params);
+    }
+
+    async all(sql: string, params?: any[]): Promise<any[]> {
+        return this.dbHelper.all(sql, params);
+    }
+
+    async exec(sql: string): Promise<void> {
+        return this.dbHelper.exec(sql);
     }
 }

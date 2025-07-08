@@ -7,13 +7,30 @@ import { Server as SocketIOServer } from "socket.io";
 import { createServer as createViteServer } from 'vite'
 import { Client } from 'pg';
 
+// Override emitWarning so the default stderr printing is bypassed for the one SQLite ExperimentalWarning.
+// Keep original behaviour for everything else.
+const originalEmitWarning = process.emitWarning;
+process.emitWarning = function (warning: any, ...args: any[]) {
+  // Debugging line removed to avoid noisy console output.
+  // If the first argument is the message string
+  if (typeof warning === 'string' && warning.includes('SQLite')) {
+    return;
+  }
+  // If the first argument is an Error object
+  if (warning instanceof Error && warning.name === 'ExperimentalWarning' && /SQLite/.test(warning.message)) {
+    return;
+  }
+  // @ts-ignore – preserve Node's original signature
+  return originalEmitWarning.call(this, warning, ...args);
+};
+
 // app specific imports
 import args from "server/args";
 import { setup_routes } from "server/apis/http";
 import { setup_sockets } from "server/apis/sockets";
 import { getMainProps } from "server/main_props";
 
-const port = args.port;
+const port = args.webPort;
 const mode = args.mode; // development or production
 const ssr_enabled = args.ssr;
 

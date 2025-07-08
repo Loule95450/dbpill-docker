@@ -2,8 +2,28 @@ import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import { createRequire } from 'node:module';
 
-const require = createRequire(import.meta.url);
-const { version: packageVersion } = require('../package.json');
+// Use a try/catch to handle both regular Node.js and SEA contexts
+let require;
+try {
+  // This works in regular Node.js ES modules
+  require = createRequire(import.meta.url);
+} catch (err) {
+  // Fallback for SEA context - use the current working directory
+  require = createRequire(process.cwd() + '/package.json');
+}
+// Try to load package.json from different locations
+let packageVersion = '1.0.0'; // fallback version
+try {
+  const pkg = require('../package.json');
+  packageVersion = pkg.version;
+} catch (err) {
+  try {
+    const pkg = require('./package.json');
+    packageVersion = pkg.version;
+  } catch (err2) {
+    // Use fallback version
+  }
+}
 
 const _yargs = yargs(hideBin(process.argv))
     .option('web-port', {
@@ -32,6 +52,11 @@ const _yargs = yargs(hideBin(process.argv))
         default: 5433,
         type: 'number',
         describe: 'Port to run the SQL proxy on'
+    })
+    .option('verbose', {
+        default: false,
+        type: 'boolean',
+        describe: 'Enable verbose debug logging'
     });
 
 _yargs.version(packageVersion);

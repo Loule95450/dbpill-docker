@@ -16,6 +16,12 @@ import { isSea, getAsset } from 'node:sea';
 
 export const queryAnalyzer = new QueryAnalyzer(argv.db);
 
+function debug(message: string, ...args: any[]) {
+    if (argv.verbose) {
+        console.log(message, ...args);
+    }
+}
+
 enum CommandType {
     Startup = 0,
     Query = 81,
@@ -88,7 +94,7 @@ class AdvancedPostgresProxySession implements IAdvancedProxySession {
     }
 
     onConnect(socket: net.Socket) {
-        // console.log('👤 Client connected, IP: ', socket.remoteAddress);
+        // debug('👤 Client connected, IP: ', socket.remoteAddress);
     }
 
     async initSecondaryDbConnection() {
@@ -121,7 +127,7 @@ class AdvancedPostgresProxySession implements IAdvancedProxySession {
                 case CommandType.Terminate:
                     return { type: CommandType.Terminate };
                 default:
-                    // console.log(`Unknown command type: ${command.type} ${CommandType[command.type]}`);
+                    // debug(`Unknown command type: ${command.type} ${CommandType[command.type]}`);
             }
         })(command);
 
@@ -143,7 +149,7 @@ class AdvancedPostgresProxySession implements IAdvancedProxySession {
     }
 
     private async processCommand(command: Command, client: any, db: any, getRawData: () => Buffer) {
-        // console.log('Processing command:', JSON.stringify(command, null, 2));
+        // debug('Processing command:', JSON.stringify(command, null, 2));
 
         await db.sendRaw(getRawData());
 
@@ -225,8 +231,8 @@ const TLS_SERVER_OPTS: tls.TlsOptions = {
 };
 
 // Log certificate info
-console.log('[proxy] Certificate loaded successfully');
-console.log('[proxy] Key bytes:', keyBuf.length, 'cert bytes:', certBuf.length);
+debug('[proxy] Certificate loaded successfully');
+debug('[proxy] Key bytes:', keyBuf.length, 'cert bytes:', certBuf.length);
 
 // Parse backend details from the provided connection string
 const dbUrl = new URL(argv.db as string);
@@ -248,11 +254,11 @@ function startPgProxy(clientSock: net.Socket, pending?: Buffer) {
 
     let parties: { client: any; db: CommandWriter };
 
-    console.log(`[proxy] startPgProxy called. Pending buffer length: ${pending ? pending.length : 'undefined'}, socket is TLS: ${clientSock instanceof tls.TLSSocket}`);
+    debug(`[proxy] startPgProxy called. Pending buffer length: ${pending ? pending.length : 'undefined'}, socket is TLS: ${clientSock instanceof tls.TLSSocket}`);
 
     // Handle commands coming from the client
     const { writer } = bindSocket(clientSock, (cmd, wrt) => {
-        console.log(`[proxy] bindSocket callback triggered for client command: ${cmd.command.type || 'Unknown'}`);
+        debug(`[proxy] bindSocket callback triggered for client command: ${cmd.command.type || 'Unknown'}`);
         if (session.onCommand) {
             session.onCommand(cmd, parties);
         } else {
@@ -287,7 +293,7 @@ function startPgProxy(clientSock: net.Socket, pending?: Buffer) {
         writer.error((e as Error).message);
     });
     dbSock.on('close', () => {
-        console.log('[proxy] Backend DB connection closed.');
+        debug('[proxy] Backend DB connection closed.');
         clientSock.destroy(); // Ensure client socket is also closed
     });
     dbSock.setNoDelay(true);
@@ -296,7 +302,7 @@ function startPgProxy(clientSock: net.Socket, pending?: Buffer) {
         console.error('[proxy] Client socket error (in startPgProxy):', err);
     });
     clientSock.on('close', (hadError) => { // Added listener for client socket close
-        console.log(`[proxy] Client socket closed (in startPgProxy). Had error: ${hadError}`);
+        debug(`[proxy] Client socket closed (in startPgProxy). Had error: ${hadError}`);
         if (dbSock && !dbSock.destroyed) { // Ensure backend is also closed
              dbSock.destroy();
         }
@@ -304,16 +310,16 @@ function startPgProxy(clientSock: net.Socket, pending?: Buffer) {
 
     // If we already read some bytes (e.g. plain StartupMessage) feed them into the parser.
     if (pending && pending.length) {
-        console.log(`[proxy] Emitting ${pending.length} pending bytes to pg-server internal processing.`);
+        debug(`[proxy] Emitting ${pending.length} pending bytes to pg-server internal processing.`);
         clientSock.emit('data', pending);
     } else {
-        console.log('[proxy] No pending bytes to emit in startPgProxy.');
+        debug('[proxy] No pending bytes to emit in startPgProxy.');
     }
 }
 
 // === Listener that understands PostgreSQL SSLRequest handshake ===
 const listener = net.createServer((rawClient) => {
-    console.log('[proxy] TCP connection accepted from', rawClient.remoteAddress, 'port', rawClient.remotePort);
+    debug('[proxy] TCP connection accepted from', rawClient.remoteAddress, 'port', rawClient.remotePort);
     
     rawClient.on('error', (err) => {
         console.error('[proxy] rawClient error (pre-TLS):', err);
@@ -325,37 +331,37 @@ const listener = net.createServer((rawClient) => {
         if (hasReceivedData) return;
         hasReceivedData = true;
         
-        console.log('[proxy] Received first data chunk:', first8.slice(0, Math.min(first8.length, 8)).toString('hex'));
+        debug('[proxy] Received first data chunk:', first8.slice(0, Math.min(first8.length, 8)).toString('hex'));
         
         const isSSLRequest = first8.length >= 8 && first8.readUInt32BE(4) === 0x04d2162f;
 
         if (isSSLRequest) {
-            console.log('[proxy] Detected SSLRequest, upgrading to TLS');
+            debug('[proxy] Detected SSLRequest, upgrading to TLS');
             // Tell client we support TLS, then upgrade
             rawClient.write('S');
-            console.log('[proxy] Sent S response, creating TLS socket...');
+            debug('[proxy] Sent S response, creating TLS socket...');
             const tlsClient = new tls.TLSSocket(rawClient, { ...TLS_SERVER_OPTS, isServer: true });
-            console.log('[proxy] TLS socket created, waiting for handshake...');
+            debug('[proxy] TLS socket created, waiting for handshake...');
 
             // Add comprehensive TLS event logging
             tlsClient.on('keylog', (line) => {
-                console.log('[proxy] TLS keylog:', line.toString());
+                debug('[proxy] TLS keylog:', line.toString());
             });
             
             tlsClient.on('session', (session) => {
-                console.log('[proxy] TLS session established, length:', session.length);
+                debug('[proxy] TLS session established, length:', session.length);
             });
             
             tlsClient.on('secureConnect', () => {
-                console.log('[proxy] secureConnect fired!');
-                console.log('[proxy] TLS version:', tlsClient.getProtocol());
-                console.log('[proxy] TLS cipher:', tlsClient.getCipher());
-                console.log('[proxy] TLS authorized:', tlsClient.authorized);
-                console.log('[proxy] TLS server name:', (tlsClient as any).servername || 'none');
+                debug('[proxy] secureConnect fired!');
+                debug('[proxy] TLS version:', tlsClient.getProtocol());
+                debug('[proxy] TLS cipher:', tlsClient.getCipher());
+                debug('[proxy] TLS authorized:', tlsClient.authorized);
+                debug('[proxy] TLS server name:', (tlsClient as any).servername || 'none');
             });
             
             tlsClient.on('OCSPResponse', (response) => {
-                console.log('[proxy] OCSP response received');
+                debug('[proxy] OCSP response received');
             });
 
             tlsClient.on('error', (err) => {
@@ -365,24 +371,24 @@ const listener = net.createServer((rawClient) => {
             });
             
             tlsClient.on('close', (hadError) => {
-                console.log(`[proxy] tlsClient closed during/after handshake. Had error: ${hadError}`);
+                debug(`[proxy] tlsClient closed during/after handshake. Had error: ${hadError}`);
             });
             tlsClient.on('connect', () => {
-                console.log('[proxy] tlsClient connect event fired');
+                debug('[proxy] tlsClient connect event fired');
             });
             tlsClient.on('lookup', () => {
-                console.log('[proxy] tlsClient lookup event fired');
+                debug('[proxy] tlsClient lookup event fired');
             });
             tlsClient.on('ready', () => {
-                console.log('[proxy] tlsClient ready event fired');
+                debug('[proxy] tlsClient ready event fired');
             });
             tlsClient.on('timeout', () => {
-                console.log('[proxy] tlsClient timeout event fired');
+                debug('[proxy] tlsClient timeout event fired');
             });
 
             // Once we receive the first decrypted Postgres packet, start full proxying
             tlsClient.once('data', (firstPg) => {
-                console.log('[proxy] Received first Postgres bytes after TLS handshake:', firstPg.slice(0, 32).toString('hex'));
+                debug('[proxy] Received first Postgres bytes after TLS handshake:', firstPg.slice(0, 32).toString('hex'));
                 startPgProxy(tlsClient, firstPg);
             });
 
@@ -395,7 +401,7 @@ const listener = net.createServer((rawClient) => {
             tlsClient.on('data', () => clearTimeout(tlsTimeout));
             tlsClient.on('close', () => clearTimeout(tlsTimeout));
         } else {
-            console.log('[proxy] No SSLRequest detected, proceeding with plain text');
+            debug('[proxy] No SSLRequest detected, proceeding with plain text');
             // No TLS – proceed as plain text (pass along the bytes we already read)
             startPgProxy(rawClient, first8);
         }
@@ -414,10 +420,10 @@ const listener = net.createServer((rawClient) => {
     const chunk = rawClient.read(0);  // just triggers the 'readable', no drain
     
     rawClient.on('close', () => {
-        console.log('[proxy] rawClient closed');
+        debug('[proxy] rawClient closed');
     });
 });
 
-listener.listen(argv['proxy-port'] as number, () => {
-    console.log(`PostgreSQL proxy listening on port ${argv['proxy-port']} (TLS MITM ready, IPv4/IPv6)`);
+listener.listen(argv.proxyPort as number, () => {
+    console.log(`PostgreSQL proxy listening on port ${argv.proxyPort} (TLS MITM ready, IPv4/IPv6)`);
 });

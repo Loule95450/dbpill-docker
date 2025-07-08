@@ -30,9 +30,8 @@ echo "[1/3] Building project and SEA blob"
 npm run build
 
 npx esbuild run_executable.ts \
-  --bundle --platform=node --format=cjs \
-  --external:better-sqlite3 \
-  --outfile=server.bundle.cjs
+       --bundle --platform=node --format=cjs \
+       --outfile=server.bundle.cjs
 
 node --experimental-sea-config sea-config.json  # produces sea-prep.blob
 

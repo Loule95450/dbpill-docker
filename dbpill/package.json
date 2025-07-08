@@ -2,6 +2,7 @@
   "name": "spiel-bun",
   "private": true,
   "version": "1.0",
+  "nodeArgs": ["--disable-warning=ExperimentalWarning"],
   "scripts": {
     "dev": "npx tsx run.ts --mode development --port 3000",
     "dev-bun": "nodemon --exec 'bun run.ts' --watch server --watch shared --watch *.ts --ext ts,tsx,js,mjs,json",
@@ -17,7 +18,6 @@
     "@types/styled-components": "^5.1.34",
     "axios": "^1.7.5",
     "babel-plugin-styled-components": "^2.1.4",
-    "better-sqlite3": "^12.1.1",
     "compression": "^1.7.4",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
@@ -33,8 +33,8 @@
     "react-dom": "^18.2.0",
     "react-markdown": "^9.0.1",
     "react-router-dom": "^6.26.1",
-    "socket.io": "^4.7.5",
-    "socket.io-client": "^4.7.5",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "sql-formatter": "^15.4.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
@@ -42,6 +42,7 @@
     "yargs": "^17.7.2"
   },
   "devDependencies": {
+    "@types/node": "^24.0.10",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@typescript-eslint/eslint-plugin": "^7.2.0",
