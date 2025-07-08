@@ -37,6 +37,8 @@ import args from "server/args";
 import { setup_routes } from "server/apis/http";
 import { setup_sockets } from "server/apis/sockets";
 import { getMainProps } from "server/main_props";
+import { buildProxyUrl, startListener } from "server/proxy";
+import { testDbConnection } from "server/database_helper";
 
 // Node SEA (Single Executable Application) allows bundling assets at build time.
 // We import the helper APIs so that, when the application is built as a SEA,
@@ -88,10 +90,10 @@ function readAssetTextSync(relativePath: string): string {
 }
 
 const port = args.webPort;
-const mode = 'production';
-const ssr_enabled = args.ssr;
-
 async function createServer() {
+  // Quickly verify database connectivity before starting the web server
+  await testDbConnection(args.db);
+
   const app = express()
 
   const http_server = http.createServer(app);
@@ -220,8 +222,13 @@ async function createServer() {
     }
   })
 
-  http_server.listen(port, () => {
-    console.log(`Webapp listening on http://localhost:${port}`)
+  http_server.listen(port, async () => {
+    
+    // Log proxy URL using the helper function
+    const listener = await startListener();
+    const proxyUrl = buildProxyUrl(listener);
+    console.log(`→ Connect to dbpill SQL proxy at ${proxyUrl} to intercept queries.`);
+    console.log(`→ Go to dbpill web UI at http://localhost:${port} to manage the results.`)
   })
 
   return app

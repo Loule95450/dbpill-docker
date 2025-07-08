@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=800, initial-scale=1.0">
     <title>dbpill - AI-Powered Database Optimization</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,7 +24,7 @@
             font-variation-settings: "wdth" 100;
             line-height: 1.6;
             color: #fff;    
-            background-color: rgba(40, 40, 40, 1);
+            background-color: #111111;
         }
 
         h2 {
@@ -130,15 +130,30 @@
             text-align: center;
             line-height: 1.6em;
             margin: 0;
-            background: rgba(40, 40, 40, 1);
+            background: #232323;
             border-top: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        .features {
+        .tips {
             border-top: 1px solid rgba(255, 255, 255, 0.1);
-            background-color: rgba(35, 35, 35, 1);
+            background: radial-gradient(circle closest-corner at 50% 10px, #202020, #111111);
             padding: 20px;
             color: rgba(255, 255, 255, 0.8);
+        }
+
+        .tips h2 {
+            text-align: center;
+        }
+        .tips ol li {
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .tips ol li::marker {
+            color: #fff19f;
         }
         
         .feature {
@@ -157,6 +172,7 @@
         
         footer {
             border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: #111111;
             color: rgba(255, 255, 255, 0.5);
             padding: 20px 0;
             font-size: 12px;
@@ -266,10 +282,10 @@
         .command-summary {
             display: block;
             padding: 5px;
-            background-color: #2d2d2d;
+            background-color: #2f0d24;
             color: #ffffff;
             font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas, "Courier New", monospace;
-            font-size: 14px;
+            font-size: 12px;
             line-height: 1.5;
             margin: 0;
             flex: 1;
@@ -366,13 +382,14 @@
             justify-content: space-between;
         }
         .contact-info {
-            color: rgba(255, 255, 255, 0.8);
-            text-decoration: none;
-            font-size: 14px;
+            color: color(display-p3 0.964 0.7613 0.3253);
         }
         .contact-info:hover {
             text-decoration: underline;
         }
+
+
+      
     </style>
 </head>
 <body>
@@ -380,10 +397,14 @@
         <section class="header">
             <div class="container">
                 <div style="display: flex; align-items: center; gap: 10px;">
-                    <div class="logo">dbpill</div>
+                    <a href="/" style="text-decoration: none;"><div class="logo">dbpill</div></a>
                     <span class="subheading">Automated SQL indexer</span>
                 </div>
-                <a href="mailto:help@dbpill.com" class="contact-info">help@dbpill.com</a>
+                <div style="font-size: 14px; color: rgba(255, 255, 255, 0.8); text-align: right;">
+                    A project by <a href="https://x.com/mayfer" class="contact-info">Murat</a>
+                    <br />
+                    Support: <a href="mailto:help@dbpill.com" class="contact-info">help@dbpill.com</a>
+                </div>
             </div>
         </section>
 
@@ -453,14 +474,15 @@
                             <div class="terminal-title">Terminal</div>
                             <div style="width: 68px;"></div> <!-- Spacer for centering -->
                         </div>
-                        <code class="command-summary">
+                        <code class="command-summary" style="color: #999;">
                             <span style="color: #999;">$</span> <span style="color: #fff19f;">
                                 ./dbpill postgresql://user@host:5432/db
                             </span>
-
-                            <span style="color: #999;">PostgreSQL proxy running on port <span style="color: #ccc;">:5433</span><br />
-                            Web UI running on <span style="color: #ccc;">http://localhost:3000</span></span>
                             <br />
+                            <span>PostgreSQL proxy running on port <span style="color: #ccc;">:5433</span><br />
+                            <br />
+                            → Connect to dbpill SQL proxy at <span style="color: #ccc;">postgres://user@localhost:5433/db</span> to intercept queries.
+                            <br />→ Go to dbpill web UI at <span style="color: #ccc;">http://localhost:3000</span> to manage the results.<br />
                             <span style="color: #999;">█</span>
                             
                         </code>
@@ -502,13 +524,14 @@
                 </div>
             </div>
         </section>
-        <section class="features">
+        <section class="tips">
             <div class="container">
                 <h2>Tips</h2>
-                <ul>
+                <ol>
                     <li>Works best with a populated database; using a clone of your production database is recommended.</li>
                     <li>Most queries should take under a millisecond when indexed correctly, even on tables with millions or even billions of rows.</li>
                     <li>Even if you have small tables, you can apply suggested indexes early to avoid future performance issues.</li>
+                </ol>
             </div>
         </section>
     </main>

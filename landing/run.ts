@@ -109,14 +109,43 @@ function recordDownload(token: string, ip: string | null, ua: string | null) {
   );
 }
 
-// Mock executable to download – replace with real path when available
-const DOWNLOAD_PATH = path.join(import.meta.dir, "dbpill.zip");
-const DOWNLOAD_PATHS = {
-  mac: path.join(import.meta.dir, "dbpill-mac.zip"),
-  "linux-x86": path.join(import.meta.dir, "dbpill-linux-x86.zip"),
-  "linux-aarch64": path.join(import.meta.dir, "dbpill-linux-aarch64.zip"),
-  windows: path.join(import.meta.dir, "dbpill-windows.zip"),
+// Read version from main app package.json
+const mainPackageJson = JSON.parse(await Bun.file(path.join(import.meta.dir, "..", "package.json")).text());
+const APP_VERSION = mainPackageJson.version;
+
+// S3 URLs for secure downloads
+const S3_DOWNLOAD_URLS = {
+  "macos-arm64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-darwin-arm64.zip`,
+  "macos-x64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-darwin-x64.zip`,
+  "windows-x64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-windows-x64.zip`,
+  "windows-arm64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-windows-arm64.zip`,
+  "linux-x64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-linux-x64.tar.gz`,
+  "linux-arm64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-linux-arm64.tar.gz`,
 } as const;
+
+// Helper function to stream file from S3
+async function streamFromS3(url: string, filename: string, req: Request): Promise<Response> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error(`Failed to fetch from S3: ${response.status} ${response.statusText}`);
+      return new Response("Download temporarily unavailable", { status: 503 });
+    }
+
+    const contentType = filename.endsWith('.tar.gz') ? 'application/gzip' : 'application/zip';
+    
+    return new Response(response.body, {
+      headers: {
+        "Content-Type": contentType,
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "private, no-cache",
+      },
+    });
+  } catch (error) {
+    console.error(`Error streaming from S3:`, error);
+    return new Response("Download failed", { status: 500 });
+  }
+}
 
 function notFound() {
   return new Response("Not found", { status: 404 });
@@ -247,7 +276,7 @@ Bun.serve({
           },
         ],
         success_url: `${host}/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${host}/cancel`,
+        cancel_url: `${host}/`,
       });
 
       // Persist a cookie that ties this browser to the Stripe session
@@ -302,47 +331,25 @@ Bun.serve({
       return new Response(finalHtml, { headers });
     }
 
-    // --- Protected download route (cookie-only) ---------------------------
-    if (url.pathname === "/download") {
+    // --- Protected download routes (stream from S3) ----------------------
+    const downloadMatch = url.pathname.match(/^\/download\/(macos-arm64|macos-x64|windows-x64|windows-arm64|linux-x64|linux-arm64)$/);
+    if (downloadMatch) {
       const token = getCookie(req, "download_token");
       if (!token) return new Response("Unauthorized", { status: 403 });
       if (!tokenIsValid(token)) return new Response("Invalid or expired download link", { status: 404 });
+      
+      const platform = downloadMatch[1] as keyof typeof S3_DOWNLOAD_URLS;
+      const s3Url = S3_DOWNLOAD_URLS[platform];
+      if (!s3Url) return notFound();
+
       const ip = req.headers.get("x-forwarded-for") || null;
       const ua = req.headers.get("user-agent") || null;
       recordDownload(token, ip, ua);
 
-      const file = Bun.file(DOWNLOAD_PATH);
-      if (!(await file.exists())) return notFound();
-
-      return new Response(file, {
-        headers: {
-          "Content-Type": "application/octet-stream",
-          "Content-Disposition": "attachment; filename=\"dbpill.zip\"",
-        },
-      });
-    }
-
-    // --- Platform-specific download routes ------------------------------
-    const platformMatch = url.pathname.match(/^\/download\/(mac|linux-x86|linux-aarch64|windows)$/);
-    if (platformMatch) {
-      const token = getCookie(req, "download_token");
-      if (!token) return new Response("Unauthorized", { status: 403 });
-      if (!tokenIsValid(token)) return new Response("Invalid or expired download link", { status: 404 });
-      const ip = req.headers.get("x-forwarded-for") || null;
-      const ua = req.headers.get("user-agent") || null;
-      recordDownload(token, ip, ua);
-
-      const platform = platformMatch[1] as keyof typeof DOWNLOAD_PATHS;
-      const filePath = DOWNLOAD_PATHS[platform];
-      const file = Bun.file(filePath);
-      if (!(await file.exists())) return notFound();
-
-      return new Response(file, {
-        headers: {
-          "Content-Type": "application/octet-stream",
-          "Content-Disposition": `attachment; filename=\"dbpill-${platform}.zip\"`,
-        },
-      });
+      // Extract filename from S3 URL
+      const filename = s3Url.split('/').pop() || `dbpill-${platform}`;
+      
+      return streamFromS3(s3Url, filename, req);
     }
 
     // --- Static file & SPA index.html ------------------------------------
@@ -416,6 +423,19 @@ Bun.serve({
       }
 
       return new Response(JSON.stringify({ success: true }), {
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // --- Generate free redeem token ------------------------------------
+    if (url.pathname === "/generate_redeem_token") {
+      // Create an anonymous purchase token that isn’t tied to Stripe or an email.
+      // This is useful for giving out complimentary download links.
+      const customerId = `free-${randomUUID()}`;
+      const purchaseToken = getOrCreateToken(customerId, null, null, null);
+      const redeemToken = createRedeemToken(purchaseToken);
+      const link = `${url.origin}/claim/${redeemToken}`;
+      return new Response(JSON.stringify({ link }), {
         headers: { "Content-Type": "application/json" },
       });
     }

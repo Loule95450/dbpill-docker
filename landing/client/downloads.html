@@ -5,27 +5,113 @@
     <title>dbpill • Purchase complete</title>
   </head>
   <body>
+    <style>
+
+      .os-group {
+        background: rgba(255, 255, 255, 0.1);
+        width: 300px;
+        margin: 0 auto;
+        padding: 5px;
+        margin-bottom: 20px;
+        border-radius: 5px;
+      }
+
+      .os-title {
+        font-size: 20px;
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 600;
+        text-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+        margin: 5px;
+      }
+
+
+.download-link {
+        display: block;
+        background: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        text-decoration: none;
+        margin: 5px;
+        line-height: 1.2;
+        padding: 10px;
+        border-radius: 5px;
+      }
+
+      .download-link:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+
+      .download-link-filename {
+        font-size: 12px;
+        color: rgba(255, 220, 94, 0.742);
+      }
+
+      .download-link-main {
+        font-size: 16px;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
+      .download-link-sub {
+        font-size: 12px;
+        color: rgba(199, 199, 199, 0.5);
+      }
+      </style>
     <section class="hero">
       <div class="container" style="text-align:center; padding: 40px;">
-        <h1 style="color:#fff;">✅ Purchase complete</h1>
-        <p style="color:rgba(255,255,255,0.85); margin-bottom: 30px;">Your downloads are ready for <span style="font-weight:600;">__PURCHASE_EMAIL__</span>:</p>
-        <div style="display:flex; flex-direction:column; gap:16px; max-width:320px; margin: 0 auto;">
-          <a href="/download/mac" class="cta-button">
-            <span style="font-size: 20px; color: rgba(255,255,255,0.95); font-weight: 600;">dbpill Mac</span><br />
-            <span style="font-size: 14px; color: rgba(255,255,255,0.8);">Apple silicon</span>
-          </a>
-          <a href="/download/linux-x86" class="cta-button">
-            <span style="font-size: 20px; color: rgba(255,255,255,0.95); font-weight: 600;">dbpill Linux</span><br />
-            <span style="font-size: 14px; color: rgba(255,255,255,0.8);">x86</span>
-          </a>
-          <a href="/download/linux-aarch64" class="cta-button">
-            <span style="font-size: 20px; color: rgba(255,255,255,0.95); font-weight: 600;">dbpill Linux</span><br />
-            <span style="font-size: 14px; color: rgba(255,255,255,0.8);">AArch64</span>
-          </a>
-          <a href="/download/windows" class="cta-button">
-            <span style="font-size: 20px; color: rgba(255,255,255,0.95); font-weight: 600;">dbpill Windows</span><br />
-            <span style="font-size: 14px; color: rgba(255,255,255,0.8);">x86-64</span>
-          </a>
+        <h1 style="color:#fff; margin: 0;">Purchase complete</h1>
+        <p style="color:rgba(255,255,255,0.85); margin-bottom: 40px;">Your downloads are ready for <span style="font-weight:600; color:rgb(255, 220, 94);">__PURCHASE_EMAIL__</span>:</p>
+        
+        <div class="downloads-grid">
+          <!-- macOS Group -->
+          <div class="os-group">
+            <h2 class="os-title">macOS</h2>
+            <div class="os-buttons">
+              <a href="/download/macos-arm64" class="download-link">
+                <span class="download-link-filename">dbpill-1.0-darwin-arm64.zip</span><br />
+                <span class="download-link-main">Apple Silicon</span><br />
+                <span class="download-link-sub">M series chips</span>
+              </a>
+              <a href="/download/macos-x64" class="download-link">
+                <span class="download-link-filename">dbpill-1.0-darwin-x64.zip</span><br />
+                <span class="download-link-main">Intel</span><br />
+                <span class="download-link-sub">x86-64</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Windows Group -->
+          <div class="os-group">
+            <h2 class="os-title">Windows</h2>
+            <div class="os-buttons">
+              <a href="/download/windows-x64" class="download-link">
+                <span class="download-link-filename">dbpill-1.0-windows-x64.zip</span><br />
+                <span class="download-link-main">x86-64</span><br />
+                <span class="download-link-sub">Intel/AMD 64-bit</span>
+              </a>
+              <a href="/download/windows-arm64" class="download-link">
+                <span class="download-link-filename">dbpill-1.0-windows-arm64.zip</span><br />
+                <span class="download-link-main">ARM64</span><br />
+                <span class="download-link-sub">Surface Pro X, etc.</span>
+              </a>
+            </div>
+          </div>
+
+          <!-- Linux Group -->
+          <div class="os-group">
+            <h2 class="os-title">Linux</h2>
+            <div class="os-buttons">
+              <a href="/download/linux-x64" class="download-link">
+                <span class="download-link-filename">dbpill-1.0-linux-x64.tar.gz</span><br />
+                <span class="download-link-main">x86-64</span><br />
+                <span class="download-link-sub">Intel/AMD 64-bit</span>
+              </a>
+              <a href="/download/linux-arm64" class="download-link">
+                <span class="download-link-filename">dbpill-1.0-linux-arm64.tar.gz</span><br />
+                <span class="download-link-main">ARM64</span><br />
+                <span class="download-link-sub">Raspberry Pi, etc.</span>
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     </section>

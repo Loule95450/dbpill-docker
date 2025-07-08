@@ -187,6 +187,7 @@ class AdvancedPostgresProxySession implements IAdvancedProxySession {
             }
         } catch (error) {
             console.error('Error analyzing query:', error);
+            console.error('Did you try connecting to a database different than the one you are running dbpill on? In that case, proxy may still work, but queries will fail to get analyzed.');
         }
     }
 }
@@ -243,6 +244,28 @@ function createBackendSocket(): net.Socket {
     // For local development we speak plain PG protocol to the real DB.
     // If you need TLS on the backend leg, swap this for tls.connect(...) again.
     return net.connect({ host: backendHost, port: backendPort });
+}
+
+// Helper function to construct proxy URL - exported for use in run.ts and run_executable.ts
+export function buildProxyUrl(listener: net.Server): string {
+    const addressInfo = listener.address();
+    // Default values if we cannot determine from addressInfo
+    let proxyHost: string = 'localhost';
+    let proxyPort: number = Number(argv.proxyPort);
+
+    if (typeof addressInfo === 'object' && addressInfo !== null) {
+        proxyPort = addressInfo.port;
+        // When listening on all interfaces Node may report '::' (IPv6 any) or '0.0.0.0' (IPv4 any).
+        // In that case, default to localhost for a cleaner string developers can copy-paste.
+        proxyHost = (addressInfo.address === '::' || addressInfo.address === '0.0.0.0') ? 'localhost' : addressInfo.address;
+    }
+
+    // Clone the original DB URL but swap host and port for the proxy ones.
+    const proxyUrl = new URL(argv.db as string);
+    proxyUrl.hostname = proxyHost;
+    proxyUrl.port = String(proxyPort);
+
+    return proxyUrl.toString();
 }
 
 // Re-implementation of pg-serverʼs createAdvancedProxy that works with an already-accepted socket.
@@ -424,6 +447,16 @@ const listener = net.createServer((rawClient) => {
     });
 });
 
-listener.listen(argv.proxyPort as number, () => {
-    console.log(`PostgreSQL proxy listening on port ${argv.proxyPort} (TLS MITM ready, IPv4/IPv6)`);
-});
+function startListener(): Promise<net.Server> {
+    return new Promise((resolve, reject) => {
+        listener.listen(argv.proxyPort as number, () => {
+            const addressInfo = listener.address();
+            const actualPort = typeof addressInfo === 'object' && addressInfo !== null ? addressInfo.port : Number(argv.proxyPort);
+            debug(`[proxy] PostgreSQL proxy listening on port ${actualPort} (TLS MITM ready, IPv4/IPv6)`);
+            resolve(listener);
+        });
+    });
+}
+
+// Export the listener so other modules can access it for logging the proxy URL
+export { startListener, listener };
