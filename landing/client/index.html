@@ -395,6 +395,16 @@
             border-bottom: 1px solid #e5a4ff88;
         }
 
+        .faq h2 {
+            text-align: center;
+        }
+
+        .faq .highlight {
+            color: #c2f6ff;
+            font-weight: 600;
+            border-bottom: 1px solid #69868b;
+        }
+
       
     </style>
 </head>
@@ -530,6 +540,7 @@
                 </div>
             </div>
         </section>
+
         <section class="tips">
             <div class="container">
                 <h2>Quick Tips</h2>
@@ -548,6 +559,14 @@
                 <p><span class='highlight'>LLM usage is purely optional.</span> If you choose to use LLMs to assist with optimization, you can pick your own providers and API keys.</p>
                 <p><span class='highlight'>The LLM prompts are public and can be previewed.</span>  You can view them in the web UI before they are sent.</p>
                 <p style="text-shadow: 0 0 10px rgba(208, 121, 255, 1); background: linear-gradient(135deg, rgba(208, 121, 255, 0.4) 0%, rgba(180, 100, 230, 0.35) 50%, rgba(150, 80, 200, 0.3) 100%); padding: 10px 15px; border-radius: 5px;">If you have additional security &amp; privacy requirements, please contact <a href="mailto:sales@dbpill.com" style="color: #e5a4ff;">sales@dbpill.com</a> for enterprise support.</p>
+            </div>
+        </section>
+        <section class="faq">
+            <div class="container">
+                <h2>FAQ</h2>
+                <p><span class='highlight'>How is this different from slow query logs?</span> In addition to slow queries, dbpill also intercepts query params which allows it to re-run the queries with EXPLAIN ANALYZE to get full query plans. This is not possible with slow query logs.</p>
+                <p><span class='highlight'>What happens when an INSERT or UPDATE query is re-run?</span> EXPLAIN ANALYZE on updates or inserts do not modify the table, they only return the query plan. It's safe to re-run them as many times as you want.</p>
+                <p><span class='highlight'>What if suggested indexes don't improve performance?</span> You may need to modify the query, which is outside of dbpill's current scope.</p>
             </div>
         </section>
     </main>
