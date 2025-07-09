@@ -117,8 +117,8 @@ const APP_VERSION = mainPackageJson.version;
 const S3_DOWNLOAD_URLS = {
   "macos-arm64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-darwin-arm64.zip`,
   "macos-x64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-darwin-x64.zip`,
-  "windows-x64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-windows-x64.zip`,
-  "windows-arm64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-windows-arm64.zip`,
+  "windows-x64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-win-x64.zip`,
+  "windows-arm64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-win-arm64.zip`,
   "linux-x64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-linux-x64.tar.gz`,
   "linux-arm64": `https://dbpill-releases.s3.us-west-1.amazonaws.com/dbpill-${APP_VERSION}-linux-arm64.tar.gz`,
 } as const;
