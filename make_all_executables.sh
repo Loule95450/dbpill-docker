@@ -261,8 +261,8 @@ Build Date: $(date)
 Author: Murat Ayfer (https://x.com/mayfer)
 EOF
 
-  # Determine archive extension (.zip for macOS as required for notarization, .tar.gz for other platforms)
-  if [[ "$OS" == "darwin" ]]; then
+  # Determine archive extension (.zip for macOS and Windows, .tar.gz for Linux)
+  if [[ "$OS" == "darwin" || "$OS" == "win" ]]; then
     ARCHIVE_EXT="zip"
   else
     ARCHIVE_EXT="tar.gz"
@@ -278,8 +278,13 @@ EOF
   
   # Create archive from the properly named directory
   if [[ "$ARCHIVE_EXT" == "zip" ]]; then
-    # Use ditto to preserve permissions and extended attributes (including notarization tickets)
-    ditto -c -k --keepParent --sequesterRsrc --rsrc "$ARCHIVE_DIR" "${BUILD_DIR}/$ARCHIVE_NAME"
+    if [[ "$OS" == "darwin" ]]; then
+      # Use ditto to preserve permissions and extended attributes (including notarization tickets)
+      ditto -c -k --keepParent --sequesterRsrc --rsrc "$ARCHIVE_DIR" "${BUILD_DIR}/$ARCHIVE_NAME"
+    else
+      # Use standard zip for Windows and other platforms
+      (cd "$BUILD_DIR" && zip -r "$ARCHIVE_NAME" "$ARCHIVE_BASE")
+    fi
   else
     tar -czf "${BUILD_DIR}/$ARCHIVE_NAME" -C "$BUILD_DIR" "$ARCHIVE_BASE"
   fi
@@ -304,7 +309,11 @@ EOF
       rm -rf "$ARCHIVE_DIR" && mkdir -p "$ARCHIVE_DIR"
       cp -R "$WORKDIR"/* "$ARCHIVE_DIR/"
       if [[ "$ARCHIVE_EXT" == "zip" ]]; then
-        ditto -c -k --keepParent --sequesterRsrc --rsrc "$ARCHIVE_DIR" "${BUILD_DIR}/$ARCHIVE_NAME"
+        if [[ "$OS" == "darwin" ]]; then
+          ditto -c -k --keepParent --sequesterRsrc --rsrc "$ARCHIVE_DIR" "${BUILD_DIR}/$ARCHIVE_NAME"
+        else
+          (cd "$BUILD_DIR" && zip -r "$ARCHIVE_NAME" "$ARCHIVE_BASE")
+        fi
       else
         tar -czf "${BUILD_DIR}/$ARCHIVE_NAME" -C "$BUILD_DIR" "$ARCHIVE_BASE"
       fi
@@ -344,7 +353,7 @@ echo "\nBuild complete for platform(s): $PLATFORM!"
 echo "Archives created:"
 for tuple in "${TARGETS[@]}"; do
   read -r OS ARCH <<<"$tuple"
-  if [[ "$OS" == "darwin" ]]; then
+  if [[ "$OS" == "darwin" || "$OS" == "win" ]]; then
     ARCHIVE_EXT="zip"
   else
     ARCHIVE_EXT="tar.gz"
