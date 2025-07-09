@@ -202,8 +202,9 @@ ${HEADER_HTML}
 ${content}
 </main>
 ${FOOTER_HTML}${POST_FOOTER_HTML}`;
-  // Inject publishable key placeholder (present in index.html script block)
+  // Inject publishable key and version placeholders (present in index.html)
   html = html.replace(/__STRIPE_PUBLISHABLE_KEY__/g, STRIPE_PUBLISHABLE_KEY);
+  html = html.replace(/__APP_VERSION__/g, APP_VERSION);
   return html;
 }
 
@@ -353,10 +354,11 @@ Bun.serve({
     }
 
     // --- Static file & SPA index.html ------------------------------------
-    // Serve index.html with public key injected
+    // Serve index.html with public key and version injected
     if (url.pathname === "/" || url.pathname === "/index.html") {
       let html = await Bun.file(path.join(import.meta.dir, "client", "index.html")).text();
       html = html.replace(/__STRIPE_PUBLISHABLE_KEY__/g, STRIPE_PUBLISHABLE_KEY);
+      html = html.replace(/__APP_VERSION__/g, APP_VERSION);
       return new Response(html, { headers: { "Content-Type": "text/html" } });
     }
 

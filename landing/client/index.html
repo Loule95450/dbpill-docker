@@ -96,7 +96,7 @@
             background: radial-gradient(circle 180px at 50% 10px, rgb(103, 132, 15), rgb(57, 80, 10));
             color: rgba(255, 255, 255, 0.8);
             text-shadow: none;
-            box-shadow:5px 5px 5px rgba(0, 0, 0, 0.5);
+            box-shadow: 5px 5px 0 #000;
             color: var(--secondary-color);
             padding: 10px 20px;
             border-radius: 1px;
@@ -107,6 +107,7 @@
             border-left: 1px solid rgba(255, 255, 230, 0.2);
             border-right: 1px solid transparent;
             border-bottom: 1px solid transparent;
+
 
         }
         .cta-button:active {
@@ -433,21 +434,21 @@
 
             <div class="container">
                 <div class="cta-container">
-                    <span style="font-size: 14px; color: rgba(255, 255, 255, 0.9);">Version 1.0 <span style="opacity: 0.4;">released July 4, 2025</span></span><br />
+                    <span style="font-size: 14px; color: rgba(255, 255, 255, 0.9);">Version __APP_VERSION__ <span style="opacity: 0.4;">released July 4, 2025</span></span><br />
                     <a href="#" id="buy-button" class="cta-button">
                         <span style="font-size: 18px; color: rgba(255, 255, 255, 0.9);">Buy standalone executable</span><br />
                         <span style="text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);">$100</span><br />
                         <span class="one-time-fee">
                             <ul style="padding: 0; margin: 10px 0 0 0; line-height: 1.2em; text-align: left; list-style: none;">
-                                <li style="position: relative; padding-left: 1.2em;">
+                                <li style="position: relative; padding-left: 1.2em; color: #fff9d5cc;">
                                     <span style="position: absolute; left: 0; opacity: 0.5;">&#8594;</span>
-                                    One-time fee
+                                    One-time fee, updates included
                                 </li>
-                                <li style="position: relative; padding-left: 1.2em;">
+                                <li style="position: relative; padding-left: 1.2em; color: #fff9d5bb;">
                                     <span style="position: absolute; left: 0; opacity: 0.5;">&#8594;</span>
-                                    OS: Mac, Linux &amp; Windows
+                                    OS: Mac, Linux &amp; Windows (x64 &amp; arm64)
                                 </li>
-                                <li style="position: relative; padding-left: 1.2em;">
+                                <li style="position: relative; padding-left: 1.2em; color: #fff9d5aa;">
                                     <span style="position: absolute; left: 0; opacity: 0.5;">&#8594;</span>
                                     DB: PostgreSQL only
                                 </li>
