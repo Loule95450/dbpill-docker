@@ -320,7 +320,7 @@ Bun.serve({
       // Grab only the inner <body>… content from downloads.html
       const bodyMatch = rawDownloadsHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
       let downloadsContent = bodyMatch ? bodyMatch[1].trim() : rawDownloadsHtml;
-      downloadsContent = downloadsContent.replace(/__PURCHASE_EMAIL__/g, email ?? "your email");
+      downloadsContent = downloadsContent.replace(/__PURCHASE_EMAIL__/g, email ?? "anon user");
 
       const finalHtml = renderWithLayout(downloadsContent);
 
@@ -380,7 +380,7 @@ Bun.serve({
       const rawDownloadsHtml = await Bun.file(downloadPagePath).text();
       const bodyMatch = rawDownloadsHtml.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
       let downloadsContent = bodyMatch ? bodyMatch[1].trim() : rawDownloadsHtml;
-      downloadsContent = downloadsContent.replace(/__PURCHASE_EMAIL__/g, purchaseEmail ?? "your email");
+      downloadsContent = downloadsContent.replace(/__PURCHASE_EMAIL__/g, purchaseEmail ?? "anon user");
 
       const finalHtml = renderWithLayout(downloadsContent);
       return new Response(finalHtml, { headers: { "Content-Type": "text/html" } });
@@ -447,42 +447,97 @@ Bun.serve({
     if (claimMatch) {
       const redeemToken = decodeURIComponent(claimMatch[1]);
 
-      // Validate redeem link
+      // When the request is a POST we actually consume the redeem link and
+      // grant access. A GET simply renders a confirmation page so that email
+      // / chat link previewers do not prematurely consume the single-use link.
+      if (req.method === "POST") {
+        // Validate redeem link
+        if (!redeemTokenIsValid(redeemToken)) {
+          return new Response("Invalid or expired link", { status: 404 });
+        }
+
+        // Fetch the redeem record to get the associated purchase token
+        const redeemRow = db
+          .query<{ purchase_token: string }>(
+            "SELECT purchase_token FROM redeem_links WHERE token = ?",
+          )
+          .get(redeemToken);
+
+        if (!redeemRow) {
+          return new Response("Invalid link", { status: 404 });
+        }
+
+        const purchaseTokenFromLink = redeemRow.purchase_token;
+
+        const ip = req.headers.get("x-forwarded-for") || null;
+        const ua = req.headers.get("user-agent") || null;
+
+        // Ensure purchase token is still valid; if expired create a fresh one via purchase row ownership
+        let activePurchaseToken = purchaseTokenFromLink;
+        if (!tokenIsValid(activePurchaseToken)) {
+          // Find purchase row by token to get customer_id
+          const pr = db
+            .query<{ customer_id: string; email: string }>(
+              "SELECT customer_id, email FROM purchases WHERE token = ?",
+            )
+            .get(purchaseTokenFromLink);
+          activePurchaseToken = getOrCreateToken(
+            pr?.customer_id ?? randomUUID(),
+            pr?.email ?? null,
+            ip,
+            ua,
+          );
+        }
+
+        // Mark the current redeem token as claimed and invalidate others tied to same purchase
+        db.run(
+          "UPDATE redeem_links SET claimed = 1 WHERE purchase_token = ?",
+          purchaseTokenFromLink,
+        );
+
+        // Set download cookie and redirect to downloads page
+        const headers = {
+          Location: "/downloads",
+          "Set-Cookie": `download_token=${activePurchaseToken}; Max-Age=${TOKEN_TTL}; Path=/; HttpOnly; SameSite=Strict`,
+        } as const;
+        return new Response(null, { status: 302, headers });
+      }
+
+      // For GET/HEAD requests, render a confirmation page without consuming the link
+      // If the user already has an active download session (valid cookie), simply redirect
+      // them to the downloads page instead of showing an "invalid/expired" message.
+      const existingToken = getCookie(req, "download_token");
+      if (!redeemTokenIsValid(redeemToken) && existingToken && tokenIsValid(existingToken)) {
+        return new Response(null, {
+          status: 302,
+          headers: { Location: "/downloads" },
+        });
+      }
+
+      await ensureLayoutLoaded();
+
+      let bodyHtml: string;
       if (!redeemTokenIsValid(redeemToken)) {
-        return new Response("Invalid or expired link", { status: 404 });
+        bodyHtml = `<section style="text-align:center;padding:3rem 1rem;">
+  <h2>Link invalid or expired</h2>
+  <p>The link you followed is no longer valid. You can request a new one from your purchase email.</p>
+</section>`;
+      } else {
+        bodyHtml = `<section style="text-align:center;padding:3rem 1rem;">
+  <h2>Confirm download access</h2>
+  <p>Click the button below to access your dbpill downloads.</p>
+  <form method="POST" action="/claim/${redeemToken}">
+    <button type="submit" style="margin-top:1.5rem;padding:0.75rem 2rem;font-size:1rem;cursor:pointer;">Access downloads</button>
+  </form>
+</section>`;
       }
 
-      // Fetch the redeem record to get the associated purchase token
-      const redeemRow = db
-        .query<{ purchase_token: string }>("SELECT purchase_token FROM redeem_links WHERE token = ?")
-        .get(redeemToken);
-
-      if (!redeemRow) {
-        return new Response("Invalid link", { status: 404 });
-      }
-
-      const purchaseTokenFromLink = redeemRow.purchase_token;
-
-      const ip = req.headers.get("x-forwarded-for") || null;
-      const ua = req.headers.get("user-agent") || null;
-
-      // Ensure purchase token is still valid; if expired create a fresh one via purchase row ownership
-      let activePurchaseToken = purchaseTokenFromLink;
-      if (!tokenIsValid(activePurchaseToken)) {
-        // Find purchase row by token to get customer_id
-        const pr = db.query<{ customer_id: string; email: string }>("SELECT customer_id, email FROM purchases WHERE token = ?").get(purchaseTokenFromLink);
-        activePurchaseToken = getOrCreateToken(pr?.customer_id ?? randomUUID(), pr?.email ?? null, ip, ua);
-      }
-
-      // Mark the current redeem token as claimed and invalidate others tied to same purchase
-      db.run("UPDATE redeem_links SET claimed = 1 WHERE purchase_token = ?", purchaseTokenFromLink);
-
-      // Set download cookie and redirect to downloads page
-      const headers = {
-        Location: "/downloads",
-        "Set-Cookie": `download_token=${activePurchaseToken}; Max-Age=${TOKEN_TTL}; Path=/; HttpOnly; SameSite=Strict`,
-      } as const;
-      return new Response(null, { status: 302, headers });
+      const html = renderWithLayout(bodyHtml);
+      const statusCode = bodyHtml.includes("Link invalid") ? 404 : 200;
+      return new Response(html, {
+        status: statusCode,
+        headers: { "Content-Type": "text/html" },
+      });
     }
 
     // Serve other static assets in /client
