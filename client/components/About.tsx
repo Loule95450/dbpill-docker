@@ -69,14 +69,13 @@ export function About() {
       
       <h2>Contact & Support</h2>
       <p>
-        <strong>Email:</strong> <a href="mailto:support@dbpill.com">support@dbpill.com</a><br/>
-        <strong>GitHub:</strong> <a href="https://github.com/dbpill/dbpill" target="_blank" rel="noopener noreferrer">github.com/dbpill/dbpill</a><br/>
-        <strong>Documentation:</strong> <a href="https://docs.dbpill.com" target="_blank" rel="noopener noreferrer">docs.dbpill.com</a>
+        <strong>Website:</strong> <a href="https://dbpill.com">dbpill.com</a><br />
+        <strong>Email:</strong> <a href="mailto:help@dbpill.com">help@dbpill.com</a><br/>
+        <strong>Author:</strong> <a href="https://x.com/mayfer" target="_blank" rel="noopener noreferrer">@mayfer</a>
       </p>
       
       <p>
-        For bug reports, feature requests, or general questions, please reach out 
-        via email or create an issue on our GitHub repository.
+        For bug reports, feature requests, or general questions, please reach out via email.
       </p>
     </AboutContainer>
   );
