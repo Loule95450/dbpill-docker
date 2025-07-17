@@ -266,6 +266,8 @@ Bun.serve({
       const session = await stripe.checkout.sessions.create({
         mode: "payment",
         payment_method_types: ["card"],
+        // Ensure a Stripe Customer object is always created, even when the amount is $0
+        customer_creation: "always",
         line_items: [
           {
             price_data: {
@@ -301,13 +303,45 @@ Bun.serve({
 
       // Verify payment on server side
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      if (session.payment_status !== "paid") {
+
+      if (session.payment_status !== "paid" && session.payment_status !== "no_payment_required") {
         return new Response("Payment not completed", { status: 400 });
       }
 
-      // Mark as consumed so the link can't be used again later
-      const customerId = session.customer as string; // guaranteed because we request payment details
-      const email = (session.customer_details && session.customer_details.email) ? session.customer_details.email : null;
+      // Ensure we have a Stripe Customer ID. For paid sessions `session.customer` is set automatically.
+      // For $0 / no-payment sessions, Checkout might skip customer creation, so we create one manually.
+      let customerId = session.customer as string | null;
+
+      // Verify that the referenced customer really exists (Stripe might return
+      // a stale ID for no-cost checkouts). If retrieval fails, we’ll create a
+      // fresh customer below.
+      if (customerId) {
+        try {
+          await stripe.customers.retrieve(customerId);
+        } catch (_) {
+          customerId = null;
+        }
+      }
+      // Prefer the email from customer_details; fall back to the top-level customer_email that Checkout sets for free sessions.
+      const email = session.customer_details?.email ?? (session.customer_email as string | null) ?? null;
+
+      if (!customerId) {
+        // Create a lightweight customer so we can still track licences/downloads later on.
+        const newCustomer = await stripe.customers.create({ email: email ?? undefined });
+        customerId = newCustomer.id;
+      } else if (email) {
+        // Make sure the existing customer record has the collected email (Stripe omits it for some $0 sessions).
+        await stripe.customers.update(customerId, { email });
+      }
+
+      // Final verification & debug: retrieve the customer to ensure persistence
+      try {
+        await stripe.customers.retrieve(customerId);
+      } catch (_) {
+        // As a recovery step, create a fresh Customer so we don’t break the flow
+        const fallback = await stripe.customers.create({ email: email ?? undefined });
+        customerId = fallback.id;
+      }
       const ip = req.headers.get("x-forwarded-for") || null;
       const ua = req.headers.get("user-agent") || null;
       const token = getOrCreateToken(customerId, email, ip, ua);
