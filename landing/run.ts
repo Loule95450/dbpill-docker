@@ -270,7 +270,7 @@ Bun.serve({
           {
             price_data: {
               currency: "usd",
-              unit_amount: 10000, // $100.00 in cents
+              unit_amount: 0, // $100.00 in cents
               product_data: { name: "dbpill standalone executable" },
             },
             quantity: 1,
