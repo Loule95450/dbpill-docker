@@ -14,14 +14,14 @@ if [ ! -s "$PGDATA/PG_VERSION" ]; then
 fi
 
 # Start PostgreSQL using the official entrypoint (handles initdb and auth)
-echo "Starting PostgreSQL (via official entrypoint)..."
-/usr/local/bin/docker-entrypoint.sh postgres &
+echo "Starting PostgreSQL (via official entrypoint) on port ${INTERNAL_POSTGRES_PORT:-5434}..."
+/usr/local/bin/docker-entrypoint.sh postgres -p "${INTERNAL_POSTGRES_PORT:-5434}" &
 POSTGRES_PID=$!
 
 # Wait for PostgreSQL to be ready
 echo "Waiting for PostgreSQL to be ready..."
 i=0
-until pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -h 127.0.0.1 -p 5432 >/dev/null 2>&1; do
+until pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -h 127.0.0.1 -p "${INTERNAL_POSTGRES_PORT:-5434}" >/dev/null 2>&1; do
   i=$((i+1))
   if [ "$i" -gt 60 ]; then
     echo "ERROR: PostgreSQL did not become ready in time"
@@ -33,10 +33,10 @@ done
 echo "PostgreSQL is running and ready"
 
 # Build connection string
-POSTGRES_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
+POSTGRES_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${INTERNAL_POSTGRES_PORT:-5434}/${POSTGRES_DB}"
 
 # Start dbpill application
-echo "Starting dbpill application..."
+echo "Starting dbpill application on proxy port ${PROXY_PORT} and web port ${WEB_PORT}..."
 cd /app
 npx tsx run.ts "$POSTGRES_URL" --web-port "${WEB_PORT}" --proxy-port "${PROXY_PORT}" &
 DBPILL_PID=$!

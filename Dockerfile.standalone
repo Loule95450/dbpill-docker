@@ -31,13 +31,13 @@ RUN mkdir -p /app/credentials && \
     -out /app/credentials/proxy.crt \
     -days 365 -subj "/CN=dbpill-proxy"
 
-# Expose web UI port and proxy port
-EXPOSE 3000 5433
+# Expose web UI port and proxy port (proxy defaults to 5432)
+EXPOSE 3000 5432
 
 # Set default environment variables
 ENV NODE_ENV=production
 ENV WEB_PORT=3000
-ENV PROXY_PORT=5433
+ENV PROXY_PORT=5432
 
 # Start the application
 # Database connection string should be provided via POSTGRES_URL environment variable

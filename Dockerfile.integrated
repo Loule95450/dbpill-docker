@@ -35,19 +35,21 @@ RUN mkdir -p /app/credentials && \
 
 # Rely on official postgres image to manage PGDATA at runtime
 
-# Expose web UI port, proxy port, and PostgreSQL port
-EXPOSE 3000 5433 5432
+# Expose web UI port and proxy port (proxy now defaults to 5432)
+EXPOSE 3000 5432 5434
 
 # Set default environment variables
 ENV NODE_ENV=production
 ENV WEB_PORT=3000
-ENV PROXY_PORT=5433
+ENV PROXY_PORT=5432
 ENV POSTGRES_USER=dbpill
 # Do not bake passwords into the image; supply via compose or env at runtime
 # ENV POSTGRES_PASSWORD=
 ENV POSTGRES_DB=dbpill
 # Use a subdirectory to avoid issues when the volume root contains lost+found
 ENV PGDATA=/var/lib/postgresql/data/pgdata
+# Run integrated PostgreSQL on a non-standard port to free 5432 for the proxy
+ENV INTERNAL_POSTGRES_PORT=5434
 
 # Create entrypoint script
 COPY docker-entrypoint-integrated.sh /usr/local/bin/

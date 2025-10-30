@@ -10,14 +10,14 @@ services:
     container_name: dbpill-postgres-18
     ports:
       - "3000:3000"  # Web UI
-      - "5432:5433"  # dbpill Proxy
-      # - "5432:5432"  # PostgreSQL (Do not use if you want to get db pill)
+      - "5432:5432"  # dbpill Proxy (standard PostgreSQL port)
+      # - "5434:5434" # PostgreSQL is not exposed by default in integrated mode
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-dbpill}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dbpill}
       POSTGRES_DB: ${POSTGRES_DB:-dbpill}
       WEB_PORT: ${WEB_PORT:-3000}
-      PROXY_PORT: ${PROXY_PORT:-5433}
+      PROXY_PORT: ${PROXY_PORT:-5432}
     volumes:
       - postgres18-data:/var/lib/postgresql/data
     restart: unless-stopped

@@ -8,13 +8,13 @@ services:
     container_name: dbpill-standalone
     ports:
       - "3000:3000"  # Web UI
-      - "5433:5433"  # PostgreSQL Proxy
+      - "5432:5432"  # PostgreSQL Proxy
     environment:
       # PostgreSQL connection string
       # Format: postgresql://user:password@host:port/database
       POSTGRES_URL: ${POSTGRES_URL:-postgresql://user:password@postgres:5432/dbname}
       WEB_PORT: ${WEB_PORT:-3000}
-      PROXY_PORT: ${PROXY_PORT:-5433}
+      PROXY_PORT: ${PROXY_PORT:-5432}
     restart: unless-stopped
     networks:
       - dbpill-network
