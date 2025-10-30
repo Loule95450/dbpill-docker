@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  dbpill-pg17:
+    build:
+      context: .
+      dockerfile: Dockerfile.integrated
+      args:
+        PG_VERSION: "17"
+    container_name: dbpill-postgres-17
+    ports:
+      - "3000:3000"  # Web UI
+      - "5433:5433"  # dbpill Proxy
+      - "5432:5432"  # PostgreSQL
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-dbpill}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dbpill}
+      POSTGRES_DB: ${POSTGRES_DB:-dbpill}
+      WEB_PORT: ${WEB_PORT:-3000}
+      PROXY_PORT: ${PROXY_PORT:-5433}
+    volumes:
+      - postgres17-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - dbpill-network
+
+volumes:
+  postgres17-data:
+
+networks:
+  dbpill-network:
+    driver: bridge
