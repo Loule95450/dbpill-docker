@@ -1,0 +1,56 @@
+# Dockerfile for dbpill with integrated PostgreSQL
+# PostgreSQL version is specified via build argument
+
+ARG PG_VERSION=17
+FROM postgres:${PG_VERSION}-alpine
+
+# Install Node.js runtime and useful tools
+RUN apk add --no-cache \
+    nodejs-current \
+    npm \
+    bash \
+    tzdata \
+    openssl
+
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies (include dev to keep tsx available at runtime)
+RUN npm install
+
+# Copy application files
+COPY . .
+
+# Build the client application
+RUN npm run build
+
+# Create credentials directory and generate self-signed certificate for proxy
+RUN mkdir -p /app/credentials && \
+    openssl req -x509 -newkey rsa:4096 -nodes \
+    -keyout /app/credentials/proxy.key \
+    -out /app/credentials/proxy.crt \
+    -days 365 -subj "/CN=dbpill-proxy"
+
+# Rely on official postgres image to manage PGDATA at runtime
+
+# Expose web UI port, proxy port, and PostgreSQL port
+EXPOSE 3000 5433 5432
+
+# Set default environment variables
+ENV NODE_ENV=production
+ENV WEB_PORT=3000
+ENV PROXY_PORT=5433
+ENV POSTGRES_USER=dbpill
+# Do not bake passwords into the image; supply via compose or env at runtime
+# ENV POSTGRES_PASSWORD=
+ENV POSTGRES_DB=dbpill
+# Use a subdirectory to avoid issues when the volume root contains lost+found
+ENV PGDATA=/var/lib/postgresql/data/pgdata
+
+# Create entrypoint script
+COPY docker-entrypoint-integrated.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint-integrated.sh
+
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint-integrated.sh"]
