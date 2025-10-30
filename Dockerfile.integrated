@@ -38,7 +38,10 @@ RUN apk add --no-cache \
     libxslt \
     libuuid \
     lz4-libs \
-    zstd-libs
+    zstd-libs \
+    krb5-libs \
+    openldap \
+    libedit
 
 # Create postgres user and group
 RUN set -eux; \

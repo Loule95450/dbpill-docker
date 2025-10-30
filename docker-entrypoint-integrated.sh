@@ -22,12 +22,25 @@ wait_for_postgres() {
 # Initialize PostgreSQL if data directory is empty
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
     echo "Initializing PostgreSQL database..."
-    su-exec postgres initdb -D "$PGDATA" --username="$POSTGRES_USER" --pwfile=<(echo "$POSTGRES_PASSWORD")
+    # Avoid bash process substitution with su-exec; write pw to a temp file with correct perms
+    PWFILE="$(mktemp -p /tmp pgpass.XXXXXX)"
+    printf "%s" "$POSTGRES_PASSWORD" > "$PWFILE"
+    chown postgres:postgres "$PWFILE"
+    chmod 600 "$PWFILE"
+
+    su-exec postgres initdb -D "$PGDATA" --username="$POSTGRES_USER" --pwfile="$PWFILE"
+
+    rm -f "$PWFILE"
     
     # Configure PostgreSQL to listen on all interfaces
     echo "host all all 0.0.0.0/0 md5" >> "$PGDATA/pg_hba.conf"
     echo "listen_addresses='*'" >> "$PGDATA/postgresql.conf"
 fi
+
+# Ensure PostgreSQL runtime directories exist
+mkdir -p /var/run/postgresql
+chown -R postgres:postgres /var/run/postgresql
+chmod 2775 /var/run/postgresql
 
 # Start PostgreSQL in the background
 echo "Starting PostgreSQL..."
