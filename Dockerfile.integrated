@@ -23,7 +23,13 @@ RUN apk add --no-cache \
     openssl \
     bash \
     su-exec \
-    tzdata
+    tzdata \
+    icu-libs \
+    libxml2 \
+    libxslt \
+    libuuid \
+    lz4-libs \
+    zstd-libs
 
 # Create postgres user and group
 RUN set -eux; \

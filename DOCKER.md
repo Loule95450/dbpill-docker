@@ -146,6 +146,54 @@ docker-compose -f docker-compose.pg17.yml down -v
 
 ## Example: Using with an Application
 
+### Example 1: Standalone version with external PostgreSQL
+
+Create a complete setup with dbpill standalone and a separate PostgreSQL container:
+
+```yaml
+# docker-compose.example.yml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: my-postgres
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  dbpill:
+    image: ghcr.io/loule95450/dbpill-docker/dbpill-standalone:latest
+    container_name: dbpill
+    environment:
+      POSTGRES_URL: postgresql://myuser:mypassword@postgres:5432/mydb
+    ports:
+      - "3000:3000"
+      - "5433:5433"
+    depends_on:
+      - postgres
+    networks:
+      - app-network
+
+volumes:
+  postgres-data:
+
+networks:
+  app-network:
+    driver: bridge
+```
+
+Then run: `docker-compose -f docker-compose.example.yml up -d`
+
+### Example 2: Integrated version
+
 1. Start dbpill with PostgreSQL 17:
 ```bash
 docker-compose -f docker-compose.pg17.yml up -d
