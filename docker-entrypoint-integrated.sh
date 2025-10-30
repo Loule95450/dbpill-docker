@@ -33,7 +33,7 @@ done
 echo "PostgreSQL is running and ready"
 
 # Build connection string
-POSTGRES_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${INTERNAL_POSTGRES_PORT:-5432}/${POSTGRES_DB}"
+POSTGRES_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:${INTERNAL_POSTGRES_PORT:-5434}/${POSTGRES_DB}"
 
 # Start dbpill application
 echo "Starting dbpill application on proxy port ${PROXY_PORT} and web port ${WEB_PORT}..."
