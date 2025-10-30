@@ -1,11 +1,14 @@
 #!/bin/bash
 set -e
 
+# Trap SIGTERM and SIGINT to gracefully shutdown
+trap 'echo "Shutting down..."; kill -TERM $DBPILL_PID $POSTGRES_PID 2>/dev/null; wait $DBPILL_PID $POSTGRES_PID; exit 0' SIGTERM SIGINT
+
 # Function to wait for PostgreSQL to be ready
 wait_for_postgres() {
     echo "Waiting for PostgreSQL to be ready..."
     for i in {1..30}; do
-        if su-exec postgres psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c '\q' 2>/dev/null; then
+        if su-exec postgres psql -U "${POSTGRES_USER}" -d postgres -c '\q' 2>/dev/null; then
             echo "PostgreSQL is ready!"
             return 0
         fi
@@ -46,4 +49,8 @@ POSTGRES_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/
 # Start dbpill application
 echo "Starting dbpill application..."
 cd /app
-exec npx tsx run.ts "$POSTGRES_URL" --web-port "${WEB_PORT}" --proxy-port "${PROXY_PORT}"
+npx tsx run.ts "$POSTGRES_URL" --web-port "${WEB_PORT}" --proxy-port "${PROXY_PORT}" &
+DBPILL_PID=$!
+
+# Wait for both processes
+wait $DBPILL_PID $POSTGRES_PID
