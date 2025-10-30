@@ -1,59 +1,35 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 # Trap SIGTERM and SIGINT to gracefully shutdown
-trap 'echo "Shutting down..."; kill -TERM $DBPILL_PID $POSTGRES_PID 2>/dev/null; wait $DBPILL_PID $POSTGRES_PID; exit 0' SIGTERM SIGINT
+trap 'echo "Shutting down..."; kill -TERM $DBPILL_PID $POSTGRES_PID 2>/dev/null || true; wait $DBPILL_PID $POSTGRES_PID 2>/dev/null || true; exit 0' INT TERM
 
-# Function to wait for PostgreSQL to be ready
-wait_for_postgres() {
-    echo "Waiting for PostgreSQL to be ready..."
-    for i in {1..30}; do
-        if su-exec postgres psql -U "${POSTGRES_USER}" -d postgres -c '\q' 2>/dev/null; then
-            echo "PostgreSQL is ready!"
-            return 0
-        fi
-        echo "Waiting for PostgreSQL... ($i/30)"
-        sleep 1
-    done
-    echo "ERROR: PostgreSQL did not become ready in time"
-    return 1
-}
-
-# Initialize PostgreSQL if data directory is empty
+# If PGDATA looks uninitialized but not empty (e.g., leftover from a previous attempt), clear it
 if [ ! -s "$PGDATA/PG_VERSION" ]; then
-    echo "Initializing PostgreSQL database..."
-    # Avoid bash process substitution with su-exec; write pw to a temp file with correct perms
-    PWFILE="$(mktemp -p /tmp pgpass.XXXXXX)"
-    printf "%s" "$POSTGRES_PASSWORD" > "$PWFILE"
-    chown postgres:postgres "$PWFILE"
-    chmod 600 "$PWFILE"
-
-    su-exec postgres initdb -D "$PGDATA" --username="$POSTGRES_USER" --pwfile="$PWFILE"
-
-    rm -f "$PWFILE"
-    
-    # Configure PostgreSQL to listen on all interfaces
-    echo "host all all 0.0.0.0/0 md5" >> "$PGDATA/pg_hba.conf"
-    echo "listen_addresses='*'" >> "$PGDATA/postgresql.conf"
+  if [ -d "$PGDATA" ]; then
+    # Remove any content except lost+found to let initdb succeed
+    find "$PGDATA" -mindepth 1 -maxdepth 1 ! -name 'lost+found' -exec rm -rf {} + 2>/dev/null || true
+  fi
+  chown -R postgres:postgres "$(dirname "$PGDATA")"
 fi
 
-# Ensure PostgreSQL runtime directories exist
-mkdir -p /var/run/postgresql
-chown -R postgres:postgres /var/run/postgresql
-chmod 2775 /var/run/postgresql
-
-# Start PostgreSQL in the background
-echo "Starting PostgreSQL..."
-su-exec postgres postgres -D "$PGDATA" &
+# Start PostgreSQL using the official entrypoint (handles initdb and auth)
+echo "Starting PostgreSQL (via official entrypoint)..."
+/usr/local/bin/docker-entrypoint.sh postgres &
 POSTGRES_PID=$!
 
 # Wait for PostgreSQL to be ready
-wait_for_postgres
-
-# Create database if it doesn't exist
-su-exec postgres psql -U "${POSTGRES_USER}" -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = '${POSTGRES_DB}'" | grep -q 1 || \
-    su-exec postgres psql -U "${POSTGRES_USER}" -d postgres -c "CREATE DATABASE ${POSTGRES_DB};"
-
+echo "Waiting for PostgreSQL to be ready..."
+i=0
+until pg_isready -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -h 127.0.0.1 -p 5432 >/dev/null 2>&1; do
+  i=$((i+1))
+  if [ "$i" -gt 60 ]; then
+    echo "ERROR: PostgreSQL did not become ready in time"
+    exit 1
+  fi
+  echo "Waiting for PostgreSQL... ($i/60)"
+  sleep 1
+done
 echo "PostgreSQL is running and ready"
 
 # Build connection string

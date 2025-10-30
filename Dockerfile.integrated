@@ -2,60 +2,22 @@
 # PostgreSQL version is specified via build argument
 
 ARG PG_VERSION=17
-FROM postgres:${PG_VERSION}-alpine AS postgres-base
+FROM postgres:${PG_VERSION}-alpine
 
-# Use Node.js image as the final base
-FROM node:22-alpine
-
-# Copy PostgreSQL from the postgres image
-COPY --from=postgres-base /usr/local/bin/postgres /usr/local/bin/
-COPY --from=postgres-base /usr/local/bin/pg_* /usr/local/bin/
-COPY --from=postgres-base /usr/local/bin/initdb /usr/local/bin/
-COPY --from=postgres-base /usr/local/bin/psql /usr/local/bin/
-COPY --from=postgres-base /usr/local/share/postgresql /usr/local/share/postgresql
-COPY --from=postgres-base /usr/local/lib/postgresql /usr/local/lib/postgresql
-# Copy PostgreSQL shared libraries (libpq and others)
-COPY --from=postgres-base /usr/local/lib/libpq.so* /usr/local/lib/
-COPY --from=postgres-base /usr/local/lib/libpgcommon.a /usr/local/lib/
-COPY --from=postgres-base /usr/local/lib/libpgport.a /usr/local/lib/
-
-# Install dependencies required for PostgreSQL and building native modules
-# PostgreSQL runtime dependencies:
-# - icu-libs: ICU (International Components for Unicode) for text processing and collation
-# - libxml2/libxslt: XML processing capabilities for PostgreSQL's XML functions
-# - libuuid: UUID generation support
-# - lz4-libs/zstd-libs: Compression algorithms for PostgreSQL data storage
+# Install Node.js runtime and useful tools
 RUN apk add --no-cache \
-    python3 \
-    make \
-    g++ \
-    openssl \
+    nodejs-current \
+    npm \
     bash \
-    su-exec \
     tzdata \
-    icu-libs \
-    libxml2 \
-    libxslt \
-    libuuid \
-    lz4-libs \
-    zstd-libs \
-    krb5-libs \
-    openldap \
-    libedit
-
-# Create postgres user and group
-RUN set -eux; \
-    addgroup -g 70 -S postgres; \
-    adduser -u 70 -S -D -G postgres -H -h /var/lib/postgresql -s /bin/sh postgres; \
-    mkdir -p /var/lib/postgresql; \
-    chown -R postgres:postgres /var/lib/postgresql
+    openssl
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (including tsx for running TypeScript)
+# Install dependencies (include dev to keep tsx available at runtime)
 RUN npm install
 
 # Copy application files
@@ -71,9 +33,7 @@ RUN mkdir -p /app/credentials && \
     -out /app/credentials/proxy.crt \
     -days 365 -subj "/CN=dbpill-proxy"
 
-# Create PostgreSQL data directory
-RUN mkdir -p /var/lib/postgresql/data && \
-    chown -R postgres:postgres /var/lib/postgresql
+# Rely on official postgres image to manage PGDATA at runtime
 
 # Expose web UI port, proxy port, and PostgreSQL port
 EXPOSE 3000 5433 5432
@@ -83,9 +43,11 @@ ENV NODE_ENV=production
 ENV WEB_PORT=3000
 ENV PROXY_PORT=5433
 ENV POSTGRES_USER=dbpill
-ENV POSTGRES_PASSWORD=dbpill
+# Do not bake passwords into the image; supply via compose or env at runtime
+# ENV POSTGRES_PASSWORD=
 ENV POSTGRES_DB=dbpill
-ENV PGDATA=/var/lib/postgresql/data
+# Use a subdirectory to avoid issues when the volume root contains lost+found
+ENV PGDATA=/var/lib/postgresql/data/pgdata
 
 # Create entrypoint script
 COPY docker-entrypoint-integrated.sh /usr/local/bin/
