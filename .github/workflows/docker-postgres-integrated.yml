@@ -7,10 +7,10 @@ on:
       - master
     tags:
       - 'v*'
-  pull_request:
-    branches:
-      - main
-      - master
+  # pull_request:
+  #   branches:
+  #     - main
+  #     - master
   workflow_dispatch:
 
 env:
