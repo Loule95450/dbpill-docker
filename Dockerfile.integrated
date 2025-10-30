@@ -16,6 +16,11 @@ COPY --from=postgres-base /usr/local/share/postgresql /usr/local/share/postgresq
 COPY --from=postgres-base /usr/local/lib/postgresql /usr/local/lib/postgresql
 
 # Install dependencies required for PostgreSQL and building native modules
+# PostgreSQL runtime dependencies:
+# - icu-libs: ICU (International Components for Unicode) for text processing and collation
+# - libxml2/libxslt: XML processing capabilities for PostgreSQL's XML functions
+# - libuuid: UUID generation support
+# - lz4-libs/zstd-libs: Compression algorithms for PostgreSQL data storage
 RUN apk add --no-cache \
     python3 \
     make \
