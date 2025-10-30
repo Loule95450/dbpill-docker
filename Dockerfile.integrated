@@ -49,7 +49,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (including tsx for running TypeScript)
-RUN npm ci
+RUN npm install
 
 # Copy application files
 COPY . .
