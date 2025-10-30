@@ -14,6 +14,10 @@ COPY --from=postgres-base /usr/local/bin/initdb /usr/local/bin/
 COPY --from=postgres-base /usr/local/bin/psql /usr/local/bin/
 COPY --from=postgres-base /usr/local/share/postgresql /usr/local/share/postgresql
 COPY --from=postgres-base /usr/local/lib/postgresql /usr/local/lib/postgresql
+# Copy PostgreSQL shared libraries (libpq and others)
+COPY --from=postgres-base /usr/local/lib/libpq.so* /usr/local/lib/
+COPY --from=postgres-base /usr/local/lib/libpgcommon.a /usr/local/lib/
+COPY --from=postgres-base /usr/local/lib/libpgport.a /usr/local/lib/
 
 # Install dependencies required for PostgreSQL and building native modules
 # PostgreSQL runtime dependencies:
