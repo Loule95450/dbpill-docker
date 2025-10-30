@@ -12,6 +12,12 @@ services:
       - "3000:3000"  # Web UI
       - "5432:5432"  # dbpill Proxy (standard PostgreSQL port)
       # - "5434:5434" # PostgreSQL is not exposed by default in integrated mode
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p ${PROXY_PORT:-5432} -U ${POSTGRES_USER:-dbpill} -d ${POSTGRES_DB:-dbpill}"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-dbpill}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dbpill}

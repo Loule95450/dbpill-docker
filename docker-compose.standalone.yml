@@ -9,6 +9,12 @@ services:
     ports:
       - "3000:3000"  # Web UI
       - "5432:5432"  # PostgreSQL Proxy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p ${PROXY_PORT:-5432} -U ${POSTGRES_USER:-dbpill} -d ${POSTGRES_DB:-dbpill}"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
     environment:
       # PostgreSQL connection string
       # Format: postgresql://user:password@host:port/database

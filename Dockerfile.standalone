@@ -8,7 +8,8 @@ RUN apk add --no-cache \
     python3 \
     make \
     g++ \
-    openssl
+    openssl \
+    postgresql-client
 
 WORKDIR /app
 
